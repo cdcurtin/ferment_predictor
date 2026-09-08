@@ -124,7 +124,11 @@
   .detail-row td{background:var(--surface-2);padding:1rem 1.25rem 1.25rem;}
   .detail-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:1.25rem;}
   @media (max-width:760px){.detail-grid{grid-template-columns:1fr;}}
+  .detail-chart-wrap{position:relative;}
   .detail-chart-wrap svg{width:100%;height:auto;display:block;}
+  .chart-tooltip{position:absolute;pointer-events:none;transform:translate(-50%,-100%);background:var(--surface);border:1px solid var(--border-strong);border-radius:6px;padding:5px 8px;font-size:11.5px;line-height:1.4;white-space:nowrap;z-index:2;}
+  .chart-tooltip .tt-date{color:var(--ink-muted);}
+  .chart-tooltip .tt-brix{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:500;color:var(--ink);}
   .detail-stats{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint);margin:.5rem 0 0;}
   .detail-legend{display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:11.5px;color:var(--ink-muted);margin-top:.4rem;}
   .detail-legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -146,7 +150,10 @@
   .gridline{stroke:var(--border);stroke-width:1;}
   .axisline{stroke:var(--border-strong);stroke-width:1;}
   .curve{stroke:var(--ferment);stroke-width:2.3;fill:none;}
-  .point{fill:var(--must);stroke:var(--surface);stroke-width:1.3;}
+  .point{fill:var(--must);stroke:var(--surface);stroke-width:1.3;cursor:pointer;}
+  .point:hover{r:6;}
+  .hline-label{font-family:var(--font-mono);font-size:10px;font-weight:500;paint-order:stroke;stroke-width:3px;stroke-linejoin:round;}
+  .swatch-hline{width:14px;height:0;display:inline-block;}
   .band10{fill:var(--must);opacity:.16;}
   .band50{fill:var(--ferment);opacity:.16;}
   .band0{fill:var(--danger);opacity:.14;}
@@ -484,7 +491,7 @@
     for (var k in attrs) el.setAttribute(k, attrs[k]);
     return el;
   }
-  function buildDetailChart(ferment){
+  function buildDetailChart(ferment, tooltipEl, wrapEl){
     var svg = svgEl("svg", { viewBox:"0 0 620 300", role:"img",
       "aria-label": "Fitted Brix decline curve for " + ferment.id });
     var W=620,H=300,mL=44,mR=14,mT=14,mB=32;
@@ -495,7 +502,12 @@
     var farthest = ferment.milestones.reduce(function(m,x){ return Math.max(m, x.p.hi); }, 0);
     var xMax = Math.ceil(Math.max.apply(null, days.concat([farthest+1, 6])));
     var xStep = xMax > 12 ? 3 : (xMax > 6 ? 2 : 1);
-    var rangeVals = brixVals.concat([theta[1], theta[0]]);
+
+    var firstBrix = ferment.readings[0].brix;
+    var brix10 = firstBrix - 0.10*(firstBrix - theta[1]);
+    var brix50 = firstBrix - 0.50*(firstBrix - theta[1]);
+
+    var rangeVals = brixVals.concat([theta[1], theta[0], brix10, brix50]);
     var yMin = Math.floor((Math.min.apply(null, rangeVals)-2)/5)*5;
     var yMax = Math.ceil((Math.max.apply(null, rangeVals)+2)/5)*5;
     function sx(day){ return mL + (day/xMax)*plotW; }
@@ -524,14 +536,51 @@
       svg.appendChild(svgEl("line", { class:markerClass[m.key], x1:sx(m.p.day), x2:sx(m.p.day), y1:mT, y2:mT+plotH }));
     });
 
+    function hLine(brixVal, colorVar, label){
+      var y = sy(brixVal);
+      svg.appendChild(svgEl("line", { x1:mL, x2:mL+plotW, y1:y, y2:y,
+        style:"stroke:"+colorVar+";stroke-width:1;stroke-dasharray:2 3;opacity:0.85;" }));
+      var t = svgEl("text", { class:"hline-label", x:mL+plotW-6, y:y-4, "text-anchor":"end",
+        style:"fill:"+colorVar+";stroke:var(--surface);" });
+      t.textContent = label;
+      svg.appendChild(t);
+    }
+    hLine(brix10, "var(--must-ink)", "10% drop: " + brix10.toFixed(1) + " Brix");
+    hLine(brix50, "var(--ferment-ink)", "50% drop: " + brix50.toFixed(1) + " Brix");
+
     var pts = [], N=140;
     for (var i=0;i<=N;i++){
       var day=(xMax*i)/N, b=logistic4(day,theta[0],theta[1],theta[2],theta[3]);
       pts.push(sx(day).toFixed(2)+","+sy(b).toFixed(2));
     }
     svg.appendChild(svgEl("polyline", { class:"curve", points: pts.join(" ") }));
+
+    function positionTooltip(relX, relY){
+      tooltipEl.style.left = relX + "px";
+      tooltipEl.style.top = (relY - 10) + "px";
+      tooltipEl.hidden = false;
+      var wrapRect = wrapEl.getBoundingClientRect();
+      var tipRect = tooltipEl.getBoundingClientRect();
+      var overflowRight = tipRect.right - wrapRect.right;
+      var overflowLeft = wrapRect.left - tipRect.left;
+      var shift = 0;
+      if (overflowRight > 0) shift = -overflowRight - 4;
+      if (overflowLeft > 0) shift = overflowLeft + 4;
+      if (shift !== 0) tooltipEl.style.left = (relX + shift) + "px";
+    }
+
     ferment.readings.forEach(function(r){
-      svg.appendChild(svgEl("circle", { class:"point", cx:sx(r.day), cy:sy(r.brix), r:4 }));
+      var circle = svgEl("circle", { class:"point", cx:sx(r.day), cy:sy(r.brix), r:4 });
+      if (tooltipEl && wrapEl){
+        circle.addEventListener("mouseenter", function(){
+          var cRect = circle.getBoundingClientRect();
+          var wRect = wrapEl.getBoundingClientRect();
+          tooltipEl.innerHTML = '<div class="tt-date">' + fmtDate(r.ts) + '</div><div class="tt-brix">' + r.brix.toFixed(1) + ' Brix</div>';
+          positionTooltip(cRect.left + cRect.width/2 - wRect.left, cRect.top - wRect.top);
+        });
+        circle.addEventListener("mouseleave", function(){ tooltipEl.hidden = true; });
+      }
+      svg.appendChild(circle);
     });
     return svg;
   }
@@ -656,9 +705,11 @@
           built = true;
           var grid = document.createElement("div"); grid.className = "detail-grid";
           var left = document.createElement("div"); left.className = "detail-chart-wrap";
-          left.appendChild(buildDetailChart(f));
+          var tooltip = document.createElement("div"); tooltip.className = "chart-tooltip"; tooltip.hidden = true;
+          left.appendChild(buildDetailChart(f, tooltip, left));
+          left.appendChild(tooltip);
           var legend = document.createElement("div"); legend.className = "detail-legend";
-          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading</span><span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-b10"></i>10% window</span><span><i class="swatch sw-b50"></i>50% window</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix window</span>':'');
+          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span><span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-b10"></i>10% window</span><span><i class="swatch sw-b50"></i>50% window</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix window</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--must-ink)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ferment-ink)"></i>50% Brix value</span>';
           left.appendChild(legend);
           var stats = document.createElement("p"); stats.className = "detail-stats";
           stats.textContent = "fitted U="+f.theta[0].toFixed(1)+" L="+f.theta[1].toFixed(1)+" t50="+f.theta[2].toFixed(2)+"d s="+f.theta[3].toFixed(2);
