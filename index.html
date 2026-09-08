@@ -504,8 +504,8 @@
     var xStep = xMax > 12 ? 3 : (xMax > 6 ? 2 : 1);
 
     var firstBrix = ferment.readings[0].brix;
-    var brix10 = firstBrix - 0.10*(firstBrix - theta[1]);
-    var brix50 = firstBrix - 0.50*(firstBrix - theta[1]);
+    var brix10 = firstBrix * 0.9;
+    var brix50 = firstBrix * 0.5;
 
     var rangeVals = brixVals.concat([theta[1], theta[0], brix10, brix50]);
     var yMin = Math.floor((Math.min.apply(null, rangeVals)-2)/5)*5;
