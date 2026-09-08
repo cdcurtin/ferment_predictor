@@ -3,118 +3,121 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ferment Monitor</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%87%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<title>Curtin Lab Wine Ferment Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23002855'/%3E%3Ctext x='50' y='70' font-size='58' text-anchor='middle'%3E%F0%9F%8D%B7%3C/text%3E%3C/svg%3E">
 <style>
   :root{
-    --bg:#F5F6F1; --surface:#FFFFFF; --surface-2:#ECEFE6;
-    --ink:#1D2119; --ink-muted:#5B6055; --ink-faint:#8C9086;
-    --border:rgba(29,33,25,0.13); --border-strong:rgba(29,33,25,0.24);
-    --must:#B8791E; --must-ink:#7A5013; --must-bg:#FBEEDA;
-    --ferment:#2F6B5E; --ferment-ink:#1E463D; --ferment-bg:#E4F0EC;
+    --bg:#f0f2f8; --surface:#FFFFFF; --surface-2:#eaf0fb;
+    --ink:#222222; --ink-muted:#556; --ink-faint:#99a;
+    --border:#dde; --border-strong:#b9c6e0;
+    --navy:#002855; --blue:#004aaa; --blue-deep:#00357a; --ink2:#002855;
     --danger:#B23A2E; --danger-bg:#F7E3E0;
-    --status-ready:#3C7A3E; --status-ready-bg:#E3EFDF;
-    --font-display:'IBM Plex Serif',Georgia,serif;
-    --font-body:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;
-    --font-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+    --status-ready:#2e7d32; --status-ready-bg:#e3f0e4;
+    --status-pending:#a3620a; --status-pending-bg:#fbeed9;
+    --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --bg:#12150F; --surface:#191D15; --surface-2:#20251B;
-      --ink:#EAEDE3; --ink-muted:#B4B9A9; --ink-faint:#7C8171;
-      --border:rgba(234,237,227,0.12); --border-strong:rgba(234,237,227,0.24);
-      --must:#E3A54A; --must-ink:#F6DDB0; --must-bg:rgba(227,165,74,0.14);
-      --ferment:#5FB39F; --ferment-ink:#BFE8DC; --ferment-bg:rgba(95,179,159,0.14);
+      --bg:#0b1220; --surface:#111a2e; --surface-2:#16223a;
+      --ink:#e7ebf5; --ink-muted:#aab4cc; --ink-faint:#7c88a6;
+      --border:rgba(231,235,245,0.14); --border-strong:rgba(231,235,245,0.28);
+      --navy:#04102a; --blue:#6fa8ff; --blue-deep:#bcd4ff; --ink2:#e2ebfb;
       --danger:#E0685A; --danger-bg:rgba(224,104,90,0.14);
       --status-ready:#7FCB82; --status-ready-bg:rgba(127,203,130,0.14);
+      --status-pending:#e3a54a; --status-pending-bg:rgba(227,165,74,0.14);
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"]{
-    --bg:#12150F; --surface:#191D15; --surface-2:#20251B;
-    --ink:#EAEDE3; --ink-muted:#B4B9A9; --ink-faint:#7C8171;
-    --border:rgba(234,237,227,0.12); --border-strong:rgba(234,237,227,0.24);
-    --must:#E3A54A; --must-ink:#F6DDB0; --must-bg:rgba(227,165,74,0.14);
-    --ferment:#5FB39F; --ferment-ink:#BFE8DC; --ferment-bg:rgba(95,179,159,0.14);
+    --bg:#0b1220; --surface:#111a2e; --surface-2:#16223a;
+    --ink:#e7ebf5; --ink-muted:#aab4cc; --ink-faint:#7c88a6;
+    --border:rgba(231,235,245,0.14); --border-strong:rgba(231,235,245,0.28);
+    --navy:#04102a; --blue:#6fa8ff; --blue-deep:#bcd4ff; --ink2:#e2ebfb;
     --danger:#E0685A; --danger-bg:rgba(224,104,90,0.14);
     --status-ready:#7FCB82; --status-ready-bg:rgba(127,203,130,0.14);
+    --status-pending:#e3a54a; --status-pending-bg:rgba(227,165,74,0.14);
     color-scheme: dark;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;background:var(--bg);}
   body{color:var(--ink);font-family:var(--font-body);}
-  .page{max-width:1180px;margin:0 auto;padding:1.75rem 1.5rem 3rem;}
-  h1,h2,h3{font-family:var(--font-display);font-weight:600;text-wrap:balance;margin:0;}
-  code{font-family:var(--font-mono);}
+  .page{max-width:1180px;margin:0 auto;padding:0 0 3rem;}
+  h1,h2,h3{font-family:var(--font-body);font-weight:800;text-wrap:balance;margin:0;}
+  code{font-family:ui-monospace,'SF Mono',Menlo,monospace;}
   button,input{font-family:inherit;}
-  :focus-visible{outline:2px solid var(--ferment);outline-offset:2px;}
-  a{color:var(--ferment-ink);}
+  :focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+  a{color:var(--blue-deep);}
 
-  .masthead{display:flex;flex-wrap:wrap;gap:1.5rem;justify-content:space-between;align-items:flex-end;padding-bottom:1.5rem;margin-bottom:1.5rem;border-bottom:1px solid var(--border);}
-  .mast-left{max-width:560px;}
-  .eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--ferment-ink);background:var(--ferment-bg);display:inline-block;padding:3px 9px;border-radius:3px;margin:0 0 .65rem;font-weight:500;}
-  .masthead h1{font-size:27px;line-height:1.15;margin-bottom:.5rem;}
-  .lede{font-size:14.5px;line-height:1.6;color:var(--ink-muted);margin:0;max-width:52ch;}
-  .mast-badge{display:grid;grid-template-columns:auto auto;gap:2px 10px;font-size:12px;align-content:start;white-space:nowrap;}
-  .badge-label{color:var(--ink-faint);text-align:right;}
-  .badge-value{font-family:var(--font-mono);color:var(--ink-muted);}
+  header.top{background:var(--navy);color:#fff;padding:34px 28px 30px;}
+  header.top .wrap{max-width:1180px;margin:0 auto;}
+  header.top .affil{margin:0 0 4px;font-size:.85rem;opacity:.65;}
+  header.top h1{font-size:2rem;font-weight:800;letter-spacing:.3px;}
+  header.top p{margin-top:6px;font-size:.95rem;opacity:.75;max-width:70ch;line-height:1.55;}
+  header.top .badges{margin-top:14px;display:flex;gap:.6rem;flex-wrap:wrap;}
+  header.top .hbadge{font-size:11.5px;background:rgba(255,255,255,.12);padding:4px 10px;border-radius:99px;}
+  header.top .hbadge b{font-weight:700;}
+
+  .content{max-width:1180px;margin:0 auto;padding:1.75rem 1.5rem 0;}
 
   .dropzone{border:1.5px dashed var(--border-strong);border-radius:12px;background:var(--surface);padding:1.6rem;text-align:center;margin-bottom:1.5rem;transition:border-color .15s, background .15s;}
   @media (prefers-reduced-motion:reduce){.dropzone{transition:none;}}
-  .dropzone.drag{border-color:var(--must);background:var(--must-bg);}
+  .dropzone.drag{border-color:var(--blue);background:var(--surface-2);}
   .dropzone p{margin:0 0 .6rem;font-size:14px;color:var(--ink-muted);}
-  .dropzone .dz-title{font-family:var(--font-display);font-size:17px;font-weight:600;color:var(--ink);margin-bottom:.3rem;}
+  .dropzone .dz-title{font-size:17px;font-weight:700;color:var(--ink);margin-bottom:.3rem;}
   .dz-actions{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;margin-top:.75rem;}
-  .btn{font-size:13px;font-weight:500;border-radius:7px;padding:8px 15px;cursor:pointer;border:1px solid transparent;transition:background .15s;}
+  .btn{font-size:13px;font-weight:600;border-radius:7px;padding:8px 15px;cursor:pointer;border:1px solid transparent;transition:background .15s;}
   @media (prefers-reduced-motion:reduce){.btn{transition:none;}}
-  .btn-primary{background:var(--must);color:#fff;}
-  .btn-primary:hover{background:var(--must-ink);}
-  .btn-ghost{background:var(--surface-2);color:var(--ink);border-color:var(--border);}
+  .btn-primary{background:var(--blue);color:#fff;}
+  .btn-primary:hover{background:var(--blue-deep);}
+  .btn-ghost{background:var(--surface-2);color:var(--blue-deep);border-color:var(--border);}
   .btn-ghost:hover{border-color:var(--border-strong);}
   .btn-text{background:none;border:none;color:var(--ink-muted);text-decoration:underline;text-underline-offset:2px;font-size:12.5px;cursor:pointer;padding:4px 2px;}
   .btn-text:hover{color:var(--ink);}
   #fileInput{display:none;}
   .parse-msg{font-size:12.5px;margin-top:.6rem;}
   .weight-control{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.9rem;padding-top:.8rem;border-top:1px solid var(--border);font-size:12.5px;color:var(--ink-muted);}
-  .weight-control label{font-weight:500;color:var(--ink);}
-  .weight-control input{width:56px;background:var(--surface);color:var(--ink);border:1px solid var(--border-strong);border-radius:6px;padding:5px 7px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:center;}
+  .weight-control label{font-weight:600;color:var(--ink);}
+  .weight-control input{width:56px;background:var(--surface);color:var(--ink);border:1px solid var(--border-strong);border-radius:6px;padding:5px 7px;font-variant-numeric:tabular-nums;text-align:center;}
   .weight-hint{color:var(--ink-faint);max-width:44ch;text-align:left;}
   .parse-msg.ok{color:var(--status-ready);}
   .parse-msg.err{color:var(--danger);}
 
   .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.5rem;}
   @media (max-width:820px){.summary{grid-template-columns:repeat(2,1fr);}}
-  .stat-tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.85rem 1rem;}
-  .stat-tile .n{font-family:var(--font-mono);font-size:24px;font-weight:500;line-height:1.1;}
+  .stat-tile{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;}
+  .stat-tile .n{font-size:24px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;}
   .stat-tile .l{font-size:11.5px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:.3rem;}
-  .next-tile{grid-column:span 2;background:var(--ferment-bg);border:1px solid transparent;}
+  .next-tile{grid-column:span 2;background:var(--surface-2);border:1px solid transparent;}
   @media (max-width:820px){.next-tile{grid-column:span 2;}}
-  .next-tile .l{color:var(--ferment-ink);}
-  .next-tile .n{font-size:15px;font-family:var(--font-body);font-weight:500;line-height:1.35;}
-  .next-tile .n code{background:none;font-family:var(--font-mono);}
+  .next-tile .l{color:var(--blue-deep);}
+  .next-tile .n{font-size:14px;font-weight:600;line-height:1.5;}
+  .next-tile .n code{background:none;}
+  .next-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.3rem;}
+  .next-list li{display:flex;justify-content:space-between;gap:.75rem;}
+  .next-list .nf-id{font-weight:700;color:var(--blue-deep);}
+  .next-list .nf-when{color:var(--ink-muted);font-weight:400;white-space:nowrap;font-variant-numeric:tabular-nums;}
 
   .table-section{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
   .table-wrap{overflow-x:auto;}
   table{width:100%;border-collapse:collapse;font-size:13px;min-width:820px;}
-  thead th{text-align:left;font-weight:500;color:var(--ink-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:9px 12px;background:var(--surface-2);border-bottom:1px solid var(--border);white-space:nowrap;}
+  thead th{text-align:left;font-weight:700;color:var(--ink-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:9px 12px;background:var(--surface-2);border-bottom:1px solid var(--border);white-space:nowrap;}
   tbody td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle;}
   tbody tr.ferment-row{cursor:pointer;}
   tbody tr.ferment-row:hover{background:var(--surface-2);}
   tbody tr:last-child td{border-bottom:none;}
-  .fid{font-weight:500;}
-  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink);}
+  .fid{font-weight:700;}
+  .mono{font-variant-numeric:tabular-nums;color:var(--ink);}
   .muted{color:var(--ink-faint);}
   .cell-date{display:flex;flex-direction:column;gap:1px;}
-  .cell-date .d{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;}
+  .cell-date .d{font-variant-numeric:tabular-nums;font-size:12.5px;}
   .cell-date .rel{font-size:11px;color:var(--ink-faint);}
-  .cell-date .rel.stale{color:var(--must-ink);font-weight:500;}
+  .cell-date .rel.stale{color:var(--status-pending);font-weight:600;}
 
-  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;padding:3px 9px 3px 7px;border-radius:99px;white-space:nowrap;}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 9px 3px 7px;border-radius:99px;white-space:nowrap;}
   .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
   .pill-ready{background:var(--status-ready-bg);color:var(--status-ready);}
-  .pill-insufficient{background:var(--must-bg);color:var(--must-ink);}
+  .pill-insufficient{background:var(--status-pending-bg);color:var(--status-pending);}
   .pill-complete{background:var(--surface-2);color:var(--ink-faint);}
 
   .chevron{color:var(--ink-faint);font-size:11px;transition:transform .15s;display:inline-block;}
@@ -128,42 +131,42 @@
   .detail-chart-wrap svg{width:100%;height:auto;display:block;}
   .chart-tooltip{position:absolute;pointer-events:none;transform:translate(-50%,-100%);background:var(--surface);border:1px solid var(--border-strong);border-radius:6px;padding:5px 8px;font-size:11.5px;line-height:1.4;white-space:nowrap;z-index:2;}
   .chart-tooltip .tt-date{color:var(--ink-muted);}
-  .chart-tooltip .tt-brix{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:500;color:var(--ink);}
-  .detail-stats{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint);margin:.5rem 0 0;}
+  .chart-tooltip .tt-brix{font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink);}
+  .detail-stats{font-size:11.5px;color:var(--ink-faint);margin:.5rem 0 0;font-variant-numeric:tabular-nums;}
   .detail-legend{display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:11.5px;color:var(--ink-muted);margin-top:.4rem;}
   .detail-legend span{display:inline-flex;align-items:center;gap:5px;}
   .swatch{width:10px;height:10px;border-radius:3px;display:inline-block;}
-  .sw-point{background:var(--must);}
-  .sw-line{background:var(--ferment);}
-  .sw-b10{background:var(--must);opacity:.4;}
-  .sw-b50{background:var(--ferment);opacity:.4;}
+  .sw-point{background:var(--ink2);}
+  .sw-line{background:var(--blue);}
+  .sw-b10{background:var(--blue);opacity:.4;}
+  .sw-b50{background:var(--ink2);opacity:.4;}
   .sw-b0{background:var(--danger);opacity:.4;}
 
   .milestones{display:flex;flex-direction:column;gap:.6rem;}
   .milestone{background:var(--surface);border-radius:8px;padding:.65rem .8rem;}
   .milestone .m-label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-muted);margin:0 0 .2rem;}
-  .milestone .m-val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:15px;margin:0;}
+  .milestone .m-val{font-variant-numeric:tabular-nums;font-size:15px;margin:0;font-weight:700;}
   .milestone .m-sub{font-size:11.5px;color:var(--ink-faint);margin:.15rem 0 0;}
 
-  .axis-label{font-family:var(--font-mono);font-size:10px;fill:var(--ink-faint);}
-  .axis-title{font-family:var(--font-body);font-size:11px;fill:var(--ink-muted);}
+  .axis-label{font-size:10px;fill:var(--ink-faint);}
+  .axis-title{font-size:11px;fill:var(--ink-muted);}
   .gridline{stroke:var(--border);stroke-width:1;}
   .axisline{stroke:var(--border-strong);stroke-width:1;}
-  .curve{stroke:var(--ferment);stroke-width:2.3;fill:none;}
-  .point{fill:var(--must);stroke:var(--surface);stroke-width:1.3;cursor:pointer;}
+  .curve{stroke:var(--blue);stroke-width:2.3;fill:none;}
+  .point{fill:var(--ink2);stroke:var(--surface);stroke-width:1.3;cursor:pointer;}
   .point:hover{r:6;}
-  .hline-label{font-family:var(--font-mono);font-size:10px;font-weight:500;paint-order:stroke;stroke-width:3px;stroke-linejoin:round;}
+  .hline-label{font-size:10px;font-weight:700;paint-order:stroke;stroke-width:3px;stroke-linejoin:round;}
   .swatch-hline{width:14px;height:0;display:inline-block;}
-  .band10{fill:var(--must);opacity:.16;}
-  .band50{fill:var(--ferment);opacity:.16;}
+  .band10{fill:var(--blue);opacity:.14;}
+  .band50{fill:var(--ink2);opacity:.12;}
   .band0{fill:var(--danger);opacity:.14;}
-  .marker10{stroke:var(--must-ink);stroke-width:1.1;stroke-dasharray:3 3;}
-  .marker50{stroke:var(--ferment-ink);stroke-width:1.1;stroke-dasharray:3 3;}
+  .marker10{stroke:var(--blue-deep);stroke-width:1.1;stroke-dasharray:3 3;}
+  .marker50{stroke:var(--ink2);stroke-width:1.1;stroke-dasharray:3 3;}
   .marker0{stroke:var(--danger);stroke-width:1.1;stroke-dasharray:3 3;}
 
   .spark{display:block;}
-  .spark-line{stroke:var(--ferment);stroke-width:1.6;fill:none;}
-  .spark-point{fill:var(--must);}
+  .spark-line{stroke:var(--blue);stroke-width:1.6;fill:none;}
+  .spark-point{fill:var(--ink2);}
 
   .empty-state{padding:3rem 1.5rem;text-align:center;color:var(--ink-faint);font-size:13.5px;}
 
@@ -174,21 +177,22 @@
 </head>
 <body>
 <div class="page">
-  <header class="masthead">
-    <div class="mast-left">
-      <p class="eyebrow">Fermentation kinetics · multi-ferment</p>
-      <h1>Ferment monitor</h1>
-      <p class="lede">Drop in a readings spreadsheet for up to dozens of ferments at once — get predicted 10%, 50%, and zero-Brix timings for every one, with the ferment that needs your attention soonest surfaced first.</p>
-    </div>
-    <div class="mast-badge">
-      <span class="badge-label">Model</span><span class="badge-value">4-param logistic</span>
-      <span class="badge-label">Priors from</span><span class="badge-value">24 replicate curves</span>
+  <header class="top">
+    <div class="wrap">
+      <p class="affil">Oregon State University · Curtin Lab · Fermentation Microbiology</p>
+      <h1>Curtin Lab Wine Ferment Monitor</h1>
+      <p>Drop in a readings spreadsheet for up to dozens of ferments at once — get predicted 10%, 50%, and zero-Brix timings for every one, with the ferment that needs your attention soonest surfaced first.</p>
+      <div class="badges">
+        <span class="hbadge">Model: <b>4-param logistic</b></span>
+        <span class="hbadge">Priors from <b>24 replicate curves</b></span>
+      </div>
     </div>
   </header>
 
+  <div class="content">
   <div class="dropzone" id="dropzone">
     <p class="dz-title">Drop your readings spreadsheet here</p>
-    <p>.xlsx, .xls, or .csv — columns <code>ferment_id</code>, <code>datetime</code>, <code>brix</code></p>
+    <p>.xlsx, .xls, or .csv — columns <code>ferment_id</code>, <code>date</code>, <code>time</code>, <code>brix</code> (or a single <code>datetime</code> column)</p>
     <div class="dz-actions">
       <button type="button" class="btn btn-primary" id="chooseBtn">Choose file</button>
       <button type="button" class="btn btn-ghost" id="sampleBtn">Load sample data</button>
@@ -232,6 +236,7 @@
     <p>Model: <code>brix(t) = L + (U−L) / (1 + exp((t−t50)/s))</code>, a 4-parameter logistic fit, one per ferment. Each fit is a MAP (maximum a posteriori) estimate combining that ferment's own readings with priors from 24 historical replicate curves (U = 25.7 ± 0.6, L = −1.45 ± 0.32, s = 1.18 ± 0.22, noise ≈ 0.68 Brix), so sparse early data shrinks toward known ferment shape and rate instead of overfitting. The midpoint (t50 = 3.43&nbsp;d historically) is deliberately held loosely — its prior SD is widened to 2.5&nbsp;d — so a ferment with a genuinely delayed onset can shift its whole predicted curve later once readings show the lag, rather than the model assuming typical timing regardless of evidence. Zero-Brix timing is only defined once a ferment's fitted plateau (L) is below zero — until then it reads "plateau &gt; 0".</p>
       <p>Everything runs client-side in your browser via <a href="https://sheetjs.com/" target="_blank" rel="noopener">SheetJS</a> — no data leaves your machine. Fork or host this page as-is on GitHub Pages.</p>
   </footer>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -365,7 +370,9 @@
   // ---------- parsing ----------
   var FIELD_ALIASES = {
     ferment_id: ["ferment_id","fermentid","ferment","id","sample","sample_id","batch","label"],
-    datetime: ["datetime","date_time","timestamp","date","time","sampled_at","reading_time"],
+    datetime: ["datetime","date_time","timestamp","sampled_at"],
+    date: ["date","reading_date","sample_date"],
+    time: ["time","reading_time","sample_time","clock_time"],
     brix: ["brix","seq_brix","seqbrix","brix_value","reading"]
   };
   function normalizeHeader(h){ return String(h).trim().toLowerCase().replace(/[^a-z0-9]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,""); }
@@ -381,6 +388,36 @@
     var frac = n - Math.floor(n);
     return new Date(utcMs + frac * 86400000);
   }
+  function parseDateOnly(cell){
+    if (cell instanceof Date) return { y: cell.getUTCFullYear(), mo: cell.getUTCMonth(), d: cell.getUTCDate() };
+    if (typeof cell === "number"){ var dt = excelSerialToDate(cell); return { y: dt.getUTCFullYear(), mo: dt.getUTCMonth(), d: dt.getUTCDate() }; }
+    if (typeof cell === "string" && cell.trim()){
+      var s = cell.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)){ var parts = s.split("-"); return { y:+parts[0], mo:+parts[1]-1, d:+parts[2] }; }
+      var d2 = new Date(s);
+      if (!isNaN(d2.getTime())) return { y: d2.getFullYear(), mo: d2.getMonth(), d: d2.getDate() };
+    }
+    return null;
+  }
+  function parseTimeOnly(cell){
+    if (cell instanceof Date) return { h: cell.getUTCHours(), mi: cell.getUTCMinutes(), s: cell.getUTCSeconds() };
+    if (typeof cell === "number"){
+      var frac = cell - Math.floor(cell);
+      var totalSec = Math.round(frac * 86400);
+      return { h: Math.floor(totalSec/3600), mi: Math.floor((totalSec%3600)/60), s: totalSec%60 };
+    }
+    if (typeof cell === "string" && cell.trim()){
+      var m = cell.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?$/);
+      if (m){
+        var h = parseInt(m[1],10), mi = parseInt(m[2],10), se = m[3] ? parseInt(m[3],10) : 0;
+        var ap = m[4] ? m[4].toUpperCase() : null;
+        if (ap === "PM" && h < 12) h += 12;
+        if (ap === "AM" && h === 12) h = 0;
+        return { h:h, mi:mi, s:se };
+      }
+    }
+    return null;
+  }
   function parseWorkbookRows(wb){
     var sheet = wb.Sheets[wb.SheetNames[0]];
     var raw = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
@@ -391,20 +428,32 @@
       var f = matchField(normalizeHeader(h));
       if (f) colMap[f] = i;
     });
-    var missing = ["ferment_id","datetime","brix"].filter(function(f){ return colMap[f] === undefined; });
-    if (missing.length) return { rows: [], skipped: 0, error: "Missing column(s): " + missing.join(", ") + ". Expected ferment_id, datetime, brix." };
+    var hasDatetime = colMap.datetime !== undefined;
+    var hasSplitDateTime = colMap.date !== undefined && colMap.time !== undefined;
+    var missingCore = ["ferment_id","brix"].filter(function(f){ return colMap[f] === undefined; });
+    if (missingCore.length || (!hasDatetime && !hasSplitDateTime)){
+      var missing = missingCore.slice();
+      if (!hasDatetime && !hasSplitDateTime) missing.push("datetime (or date + time)");
+      return { rows: [], skipped: 0, error: "Missing column(s): " + missing.join(", ") + ". Expected ferment_id, brix, and either datetime or both date and time." };
+    }
 
     var rows = [], skipped = 0;
     for (var i = 1; i < raw.length; i++){
       var rr = raw[i];
       if (!rr || rr.every(function(c){ return c === ""; })) continue;
       var fid = rr[colMap.ferment_id];
-      var dtRaw = rr[colMap.datetime];
       var brixRaw = rr[colMap.brix];
       var dt = null;
-      if (dtRaw instanceof Date) dt = dtRaw;
-      else if (typeof dtRaw === "number") dt = excelSerialToDate(dtRaw);
-      else if (typeof dtRaw === "string" && dtRaw.trim()) { var d = new Date(dtRaw.trim()); if (!isNaN(d.getTime())) dt = d; }
+      if (hasDatetime){
+        var dtRaw = rr[colMap.datetime];
+        if (dtRaw instanceof Date) dt = dtRaw;
+        else if (typeof dtRaw === "number") dt = excelSerialToDate(dtRaw);
+        else if (typeof dtRaw === "string" && dtRaw.trim()) { var d = new Date(dtRaw.trim()); if (!isNaN(d.getTime())) dt = d; }
+      } else {
+        var dp = parseDateOnly(rr[colMap.date]);
+        var tp = parseTimeOnly(rr[colMap.time]);
+        if (dp && tp) dt = new Date(Date.UTC(dp.y, dp.mo, dp.d, tp.h, tp.mi, tp.s));
+      }
       var brix = typeof brixRaw === "number" ? brixRaw : parseFloat(brixRaw);
       if (!fid || String(fid).trim() === "" || !dt || isNaN(brix)){ skipped++; continue; }
       rows.push({ ferment_id: String(fid).trim(), ts: dt.getTime(), brix: brix });
@@ -545,8 +594,8 @@
       t.textContent = label;
       svg.appendChild(t);
     }
-    hLine(brix10, "var(--must-ink)", "10% drop: " + brix10.toFixed(1) + " Brix");
-    hLine(brix50, "var(--ferment-ink)", "50% drop: " + brix50.toFixed(1) + " Brix");
+    hLine(brix10, "var(--blue-deep)", "10% drop: " + brix10.toFixed(1) + " Brix");
+    hLine(brix50, "var(--ink2)", "50% drop: " + brix50.toFixed(1) + " Brix");
 
     var pts = [], N=140;
     for (var i=0;i<=N;i++){
@@ -625,7 +674,8 @@
     var insufCount = ferments.length - readyCount;
     var withUpcoming = ferments.filter(function(f){ return f.nextUpcoming; });
     withUpcoming.sort(function(a,b){ return a.nextUpcoming.absTs - b.nextUpcoming.absTs; });
-    var soonest = withUpcoming[0];
+    var DAY_MS = 24*3600000;
+    var within24 = withUpcoming.filter(function(f){ return (f.nextUpcoming.absTs - Date.now()) <= DAY_MS; });
 
     summaryEl.innerHTML = "";
     function stat(n,l){ var d=document.createElement("div"); d.className="stat-tile";
@@ -634,9 +684,16 @@
     summaryEl.appendChild(stat(readyCount, "Predictions ready"));
     summaryEl.appendChild(stat(insufCount, "Need more readings"));
     var nextTile = document.createElement("div"); nextTile.className = "stat-tile next-tile";
-    if (soonest){
-      var ts = soonest.t0 + soonest.nextUpcoming.m.p.day*86400000;
-      nextTile.innerHTML = '<div class="n">Next up: <code>'+soonest.id+'</code> — '+soonest.nextUpcoming.m.label+', '+fmtDate(ts)+' ('+fmtRelative(ts)+')</div><div class="l">Soonest upcoming milestone</div>';
+    if (within24.length){
+      var items = within24.map(function(f){
+        var ts = f.t0 + f.nextUpcoming.m.p.day*86400000;
+        return '<li><span class="nf-id">'+f.id+'</span> — '+f.nextUpcoming.m.label+' <span class="nf-when">'+fmtDate(ts)+' ('+fmtRelative(ts)+')</span></li>';
+      }).join("");
+      nextTile.innerHTML = '<ul class="next-list">'+items+'</ul><div class="l">Due within 24h ('+within24.length+')</div>';
+    } else if (withUpcoming.length){
+      var soonest = withUpcoming[0];
+      var sts = soonest.t0 + soonest.nextUpcoming.m.p.day*86400000;
+      nextTile.innerHTML = '<div class="n">Nothing due within 24h. Next up: <code>'+soonest.id+'</code> — '+soonest.nextUpcoming.m.label+', '+fmtDate(sts)+' ('+fmtRelative(sts)+')</div><div class="l">Soonest upcoming milestone</div>';
     } else {
       nextTile.innerHTML = '<div class="n">No upcoming milestones — all ferments are either complete or awaiting more readings.</div><div class="l">Soonest upcoming milestone</div>';
     }
@@ -709,7 +766,7 @@
           left.appendChild(buildDetailChart(f, tooltip, left));
           left.appendChild(tooltip);
           var legend = document.createElement("div"); legend.className = "detail-legend";
-          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span><span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-b10"></i>10% window</span><span><i class="swatch sw-b50"></i>50% window</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix window</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--must-ink)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ferment-ink)"></i>50% Brix value</span>';
+          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span><span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-b10"></i>10% window</span><span><i class="swatch sw-b50"></i>50% window</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix window</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--blue-deep)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ink2)"></i>50% Brix value</span>';
           left.appendChild(legend);
           var stats = document.createElement("p"); stats.className = "detail-stats";
           stats.textContent = "fitted U="+f.theta[0].toFixed(1)+" L="+f.theta[1].toFixed(1)+" t50="+f.theta[2].toFixed(2)+"d s="+f.theta[3].toFixed(2);
