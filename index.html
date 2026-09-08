@@ -77,6 +77,10 @@
   .btn-text:hover{color:var(--ink);}
   #fileInput{display:none;}
   .parse-msg{font-size:12.5px;margin-top:.6rem;}
+  .weight-control{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.9rem;padding-top:.8rem;border-top:1px solid var(--border);font-size:12.5px;color:var(--ink-muted);}
+  .weight-control label{font-weight:500;color:var(--ink);}
+  .weight-control input{width:56px;background:var(--surface);color:var(--ink);border:1px solid var(--border-strong);border-radius:6px;padding:5px 7px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:center;}
+  .weight-hint{color:var(--ink-faint);max-width:44ch;text-align:left;}
   .parse-msg.ok{color:var(--status-ready);}
   .parse-msg.err{color:var(--danger);}
 
@@ -105,6 +109,7 @@
   .cell-date{display:flex;flex-direction:column;gap:1px;}
   .cell-date .d{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;}
   .cell-date .rel{font-size:11px;color:var(--ink-faint);}
+  .cell-date .rel.stale{color:var(--must-ink);font-weight:500;}
 
   .pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;padding:3px 9px 3px 7px;border-radius:99px;white-space:nowrap;}
   .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
@@ -184,6 +189,11 @@
     </div>
     <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
     <p class="parse-msg" id="parseMsg" hidden></p>
+    <div class="weight-control">
+      <label for="firstWeightInput">Trust first reading</label>
+      <input type="number" id="firstWeightInput" min="1" max="10" step="0.5" value="4">
+      <span class="weight-hint">× — higher pulls the curve's starting point closer to your literal first reading, instead of shrinking toward historical ferments</span>
+    </div>
   </div>
 
   <div id="summarySection" hidden>
@@ -264,34 +274,38 @@
   function invert4(A){
     return gaussJordan(A, [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]);
   }
-  function residuals(theta, t, y, priorWeight){
+  function residuals(theta, t, y, priorWeight, firstReadingWeight){
     var r = [];
-    for (var i = 0; i < t.length; i++) r.push((y[i] - logistic4(t[i], theta[0], theta[1], theta[2], theta[3])) / SIGMA_OBS);
+    for (var i = 0; i < t.length; i++){
+      var w = (i === 0) ? firstReadingWeight : 1;
+      r.push(w * (y[i] - logistic4(t[i], theta[0], theta[1], theta[2], theta[3])) / SIGMA_OBS);
+    }
     for (var j = 0; j < 4; j++) r.push(priorWeight * (theta[j] - PRIOR_MEAN[j]) / PRIOR_SD[j]);
     return r;
   }
   function costOf(r){ var s = 0; for (var i = 0; i < r.length; i++) s += r[i]*r[i]; return s; }
-  function jacobianOf(theta, t, y, priorWeight){
+  function jacobianOf(theta, t, y, priorWeight, firstReadingWeight){
     var n = t.length + 4, J = [];
     for (var i = 0; i < n; i++) J.push([0,0,0,0]);
-    var h = 1e-6, r0 = residuals(theta, t, y, priorWeight);
+    var h = 1e-6, r0 = residuals(theta, t, y, priorWeight, firstReadingWeight);
     for (var j = 0; j < 4; j++){
       var thp = theta.slice(); thp[j] += h;
-      var rp = residuals(thp, t, y, priorWeight);
+      var rp = residuals(thp, t, y, priorWeight, firstReadingWeight);
       for (i = 0; i < n; i++) J[i][j] = (rp[i] - r0[i]) / h;
     }
     return J;
   }
   function clip(v, lo, hi){ return Math.min(Math.max(v, lo), hi); }
 
-  function fitMAP(t, y, priorWeight){
+  function fitMAP(t, y, priorWeight, firstReadingWeight){
     priorWeight = priorWeight || 1.0;
+    firstReadingWeight = firstReadingWeight || 1.0;
     var theta = PRIOR_MEAN.slice();
-    var curCost = costOf(residuals(theta, t, y, priorWeight));
+    var curCost = costOf(residuals(theta, t, y, priorWeight, firstReadingWeight));
     var lambda = 1e-3;
     for (var iter = 0; iter < 250; iter++){
-      var J = jacobianOf(theta, t, y, priorWeight);
-      var r = residuals(theta, t, y, priorWeight);
+      var J = jacobianOf(theta, t, y, priorWeight, firstReadingWeight);
+      var r = residuals(theta, t, y, priorWeight, firstReadingWeight);
       var JTJ = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]], JTr = [0,0,0,0];
       for (var i = 0; i < J.length; i++){
         for (var a = 0; a < 4; a++){
@@ -303,14 +317,14 @@
       var delta = solveLinear(A, JTr.map(function(v){ return -v; }));
       if (!delta){ lambda *= 10; if (lambda > 1e14) break; continue; }
       var thetaNew = theta.map(function(v, k){ return clip(v + delta[k], BOUNDS_LO[k], BOUNDS_HI[k]); });
-      var newCost = costOf(residuals(thetaNew, t, y, priorWeight));
+      var newCost = costOf(residuals(thetaNew, t, y, priorWeight, firstReadingWeight));
       if (newCost < curCost){
         var change = curCost - newCost;
         theta = thetaNew; curCost = newCost; lambda = Math.max(lambda / 10, 1e-8);
         if (change < 1e-11) break;
       } else { lambda *= 10; if (lambda > 1e14) break; }
     }
-    var Jf = jacobianOf(theta, t, y, priorWeight);
+    var Jf = jacobianOf(theta, t, y, priorWeight, firstReadingWeight);
     var JTJf = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
     for (i = 0; i < Jf.length; i++) for (a = 0; a < 4; a++) for (b = 0; b < 4; b++) JTJf[a][b] += Jf[i][a] * Jf[i][b];
     return { theta: theta, pcov: invert4(JTJf) };
@@ -388,7 +402,8 @@
   }
 
   // ---------- grouping + fitting ----------
-  function buildFerments(rows){
+  function buildFerments(rows, firstReadingWeight){
+    firstReadingWeight = firstReadingWeight || 1.0;
     var groups = {};
     rows.forEach(function(r){
       if (!groups[r.ferment_id]) groups[r.ferment_id] = [];
@@ -404,7 +419,7 @@
       if (readings.length >= 2){
         var t = readings.map(function(r){ return r.day; });
         var y = readings.map(function(r){ return r.brix; });
-        var fit = fitMAP(t, y, 1.0);
+        var fit = fitMAP(t, y, 1.0, firstReadingWeight);
         f.theta = fit.theta; f.pcov = fit.pcov;
         f.pred10 = predictFraction(fit.theta, fit.pcov, 0.10);
         f.pred50 = predictFraction(fit.theta, fit.pcov, 0.50);
@@ -589,6 +604,12 @@
       var ld = document.createElement("span"); ld.className = "d mono"; ld.textContent = f.latest.brix.toFixed(1) + " Brix";
       var lr = document.createElement("span"); lr.className = "rel"; lr.textContent = fmtDate(f.latest.ts);
       latestWrap.appendChild(ld); latestWrap.appendChild(lr);
+      var ageH = (Date.now() - f.latest.ts) / 3600000;
+      if (ageH > 36){
+        var stale = document.createElement("span"); stale.className = "rel stale";
+        stale.textContent = fmtRelative(f.latest.ts) + " — no recent reading";
+        latestWrap.appendChild(stale);
+      }
       tdLatest.appendChild(latestWrap);
 
       var tdTrend = document.createElement("td");
@@ -667,21 +688,35 @@
   var sampleBtn = document.getElementById("sampleBtn");
   var clearBtn = document.getElementById("clearBtn");
   var parseMsg = document.getElementById("parseMsg");
+  var firstWeightInput = document.getElementById("firstWeightInput");
   var STORAGE_KEY = "fermentMonitor.rows.v1";
+  var WEIGHT_KEY = "fermentMonitor.firstReadingWeight.v1";
+  var currentRows = [];
 
   function showMsg(text, ok){
     parseMsg.hidden = false; parseMsg.textContent = text;
     parseMsg.className = "parse-msg " + (ok ? "ok" : "err");
   }
 
+  function getFirstReadingWeight(){
+    var v = parseFloat(firstWeightInput.value);
+    return (isFinite(v) && v > 0) ? v : 1;
+  }
+
   function loadRows(rows, opts){
     opts = opts || {};
+    currentRows = rows;
     if (!opts.skipSave){
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(rows)); } catch(e){}
     }
-    var ferments = buildFerments(rows);
+    var ferments = buildFerments(rows, getFirstReadingWeight());
     render(ferments);
   }
+
+  firstWeightInput.addEventListener("input", function(){
+    try{ localStorage.setItem(WEIGHT_KEY, firstWeightInput.value); } catch(e){}
+    if (currentRows.length) render(buildFerments(currentRows, getFirstReadingWeight()));
+  });
 
   function handleWorkbook(wb, sourceLabel){
     var result = parseWorkbookRows(wb);
@@ -758,8 +793,14 @@
   clearBtn.addEventListener("click", function(){
     try{ localStorage.removeItem(STORAGE_KEY); } catch(e){}
     parseMsg.hidden = true;
+    currentRows = [];
     render([]);
   });
+
+  try{
+    var savedWeight = localStorage.getItem(WEIGHT_KEY);
+    if (savedWeight) firstWeightInput.value = savedWeight;
+  } catch(e){}
 
   var stored = null;
   try{
