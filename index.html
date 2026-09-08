@@ -222,7 +222,7 @@
   <div class="empty-state" id="emptyState">No data loaded yet — drop a spreadsheet above, or load the sample dataset to see how it works.</div>
 
   <footer class="colophon">
-    <p>Model: <code>brix(t) = L + (U−L) / (1 + exp((t−t50)/s))</code>, a 4-parameter logistic fit, one per ferment. Each fit is a MAP (maximum a posteriori) estimate combining that ferment's own readings with priors from 24 historical replicate curves (U = 25.7 ± 0.6, L = −1.45 ± 0.32, t50 = 3.43 ± 0.27&nbsp;d, s = 1.18 ± 0.22, noise ≈ 0.68 Brix), so sparse early data shrinks toward known ferment behavior instead of overfitting. Zero-Brix timing is only defined once a ferment's fitted plateau (L) is below zero — until then it reads "plateau &gt; 0".</p>
+    <p>Model: <code>brix(t) = L + (U−L) / (1 + exp((t−t50)/s))</code>, a 4-parameter logistic fit, one per ferment. Each fit is a MAP (maximum a posteriori) estimate combining that ferment's own readings with priors from 24 historical replicate curves (U = 25.7 ± 0.6, L = −1.45 ± 0.32, s = 1.18 ± 0.22, noise ≈ 0.68 Brix), so sparse early data shrinks toward known ferment shape and rate instead of overfitting. The midpoint (t50 = 3.43&nbsp;d historically) is deliberately held loosely — its prior SD is widened to 2.5&nbsp;d — so a ferment with a genuinely delayed onset can shift its whole predicted curve later once readings show the lag, rather than the model assuming typical timing regardless of evidence. Zero-Brix timing is only defined once a ferment's fitted plateau (L) is below zero — until then it reads "plateau &gt; 0".</p>
       <p>Everything runs client-side in your browser via <a href="https://sheetjs.com/" target="_blank" rel="noopener">SheetJS</a> — no data leaves your machine. Fork or host this page as-is on GitHub Pages.</p>
   </footer>
 </div>
@@ -234,7 +234,11 @@
 
   // ---------- model ----------
   var PRIOR_MEAN = [25.68499064, -1.45035385, 3.43089831, 1.18289234]; // U, L, t50, s
-  var PRIOR_SD   = [0.62231, 0.31538, 0.27086, 0.21833];
+  // t50's SD is intentionally loosened from the historical fit's 0.271 to 2.5: extended-lag
+  // ferments (onset delayed well beyond the 24-curve range) still need U/L/s pinned near
+  // historical values, but t50 must be free to shift the whole curve right once data shows
+  // a real delay -- see the simulation notes in the README.
+  var PRIOR_SD   = [0.62231, 0.31538, 2.5, 0.21833];
   var SIGMA_OBS  = 0.675;
   var BOUNDS_LO  = [0, -10, 0, 0.05];
   var BOUNDS_HI  = [35, 10, 15, 8];
