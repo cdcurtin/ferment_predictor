@@ -14,6 +14,7 @@
     --danger:#B23A2E; --danger-bg:#F7E3E0;
     --status-ready:#2e7d32; --status-ready-bg:#e3f0e4;
     --status-pending:#a3620a; --status-pending-bg:#fbeed9;
+    --temp:#c4501a;
     --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
     color-scheme: light;
   }
@@ -26,6 +27,7 @@
       --danger:#E0685A; --danger-bg:rgba(224,104,90,0.14);
       --status-ready:#7FCB82; --status-ready-bg:rgba(127,203,130,0.14);
       --status-pending:#e3a54a; --status-pending-bg:rgba(227,165,74,0.14);
+      --temp:#f0975a;
       color-scheme: dark;
     }
   }
@@ -37,6 +39,7 @@
     --danger:#E0685A; --danger-bg:rgba(224,104,90,0.14);
     --status-ready:#7FCB82; --status-ready-bg:rgba(127,203,130,0.14);
     --status-pending:#e3a54a; --status-pending-bg:rgba(227,165,74,0.14);
+    --temp:#f0975a;
     color-scheme: dark;
   }
   *{box-sizing:border-box;}
@@ -155,6 +158,13 @@
   .curve{stroke:var(--blue);stroke-width:2.3;fill:none;}
   .point{fill:var(--ink2);stroke:var(--surface);stroke-width:1.3;cursor:pointer;}
   .point:hover{r:6;}
+  .temp-point{fill:var(--temp);stroke:var(--surface);stroke-width:1.2;cursor:pointer;}
+  .temp-point.off{fill:var(--surface);stroke:var(--temp);stroke-width:1.6;}
+  .temp-axis-label{font-size:10px;fill:var(--temp);}
+  .temp-axis-title{font-size:11px;fill:var(--temp);}
+  .temp-axisline{stroke:var(--temp);stroke-width:1;opacity:.55;}
+  .chart-tooltip .tt-temp{font-variant-numeric:tabular-nums;font-weight:700;color:var(--temp);}
+  .sw-temp{background:var(--temp);border-radius:1px;transform:rotate(45deg) scale(.8);}
   .hline-label{font-size:10px;font-weight:700;paint-order:stroke;stroke-width:3px;stroke-linejoin:round;}
   .swatch-hline{width:14px;height:0;display:inline-block;}
   .band10{fill:var(--blue);opacity:.14;}
@@ -192,7 +202,7 @@
   <div class="content">
   <div class="dropzone" id="dropzone">
     <p class="dz-title">Drop your readings spreadsheet here</p>
-    <p>.xlsx, .xls, or .csv — columns <code>ferment_id</code>, <code>date</code>, <code>time</code>, <code>brix</code> (or a single <code>datetime</code> column)</p>
+    <p>.xlsx, .xls, or .csv — columns <code>ferment_id</code>, <code>date</code>, <code>time</code>, <code>brix</code> (or a single <code>datetime</code> column); optional <code>temp_c</code></p>
     <div class="dz-actions">
       <button type="button" class="btn btn-primary" id="chooseBtn">Choose file</button>
       <button type="button" class="btn btn-ghost" id="sampleBtn">Load sample data</button>
@@ -234,6 +244,7 @@
 
   <footer class="colophon">
     <p>Model: <code>brix(t) = L + (U−L) / (1 + exp((t−t50)/s))</code>, a 4-parameter logistic fit, one per ferment. Each fit is a MAP (maximum a posteriori) estimate combining that ferment's own readings with priors from 24 historical replicate curves (U = 25.7 ± 0.6, L = −1.45 ± 0.32, s = 1.18 ± 0.22, noise ≈ 0.68 Brix), so sparse early data shrinks toward known ferment shape and rate instead of overfitting. The midpoint (t50 = 3.43&nbsp;d historically) is deliberately held loosely — its prior SD is widened to 2.5&nbsp;d — so a ferment with a genuinely delayed onset can shift its whole predicted curve later once readings show the lag, rather than the model assuming typical timing regardless of evidence. Zero-Brix timing is only defined once a ferment's fitted plateau (L) is below zero — until then it reads "plateau &gt; 0".</p>
+    <p>Temperature (optional <code>temp_c</code> column) is plotted exactly as recorded on its own right-hand axis, fixed at 20–32&nbsp;°C — it is not modelled, and readings outside that range are pinned to the axis edge (hollow marker) with the true value in the hover tooltip.</p>
       <p>Everything runs client-side in your browser via <a href="https://sheetjs.com/" target="_blank" rel="noopener">SheetJS</a> — no data leaves your machine. Fork or host this page as-is on GitHub Pages.</p>
   </footer>
   </div>
@@ -373,7 +384,8 @@
     datetime: ["datetime","date_time","timestamp","sampled_at"],
     date: ["date","reading_date","sample_date"],
     time: ["time","reading_time","sample_time","clock_time"],
-    brix: ["brix","seq_brix","seqbrix","brix_value","reading"]
+    brix: ["brix","seq_brix","seqbrix","brix_value","reading"],
+    temp: ["temp","temp_c","temp_degc","temperature","temperature_c","temperature_degc","temp_deg_c"]
   };
   function normalizeHeader(h){ return String(h).trim().toLowerCase().replace(/[^a-z0-9]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,""); }
   function matchField(headerNorm){
@@ -389,7 +401,7 @@
     return new Date(utcMs + frac * 86400000);
   }
   function parseDateOnly(cell){
-    if (cell instanceof Date) return { y: cell.getUTCFullYear(), mo: cell.getUTCMonth(), d: cell.getUTCDate() };
+    if (cell instanceof Date) return { y: cell.getFullYear(), mo: cell.getMonth(), d: cell.getDate() };
     if (typeof cell === "number"){ var dt = excelSerialToDate(cell); return { y: dt.getUTCFullYear(), mo: dt.getUTCMonth(), d: dt.getUTCDate() }; }
     if (typeof cell === "string" && cell.trim()){
       var s = cell.trim();
@@ -400,7 +412,7 @@
     return null;
   }
   function parseTimeOnly(cell){
-    if (cell instanceof Date) return { h: cell.getUTCHours(), mi: cell.getUTCMinutes(), s: cell.getUTCSeconds() };
+    if (cell instanceof Date) return { h: cell.getHours(), mi: cell.getMinutes(), s: cell.getSeconds() };
     if (typeof cell === "number"){
       var frac = cell - Math.floor(cell);
       var totalSec = Math.round(frac * 86400);
@@ -452,11 +464,13 @@
       } else {
         var dp = parseDateOnly(rr[colMap.date]);
         var tp = parseTimeOnly(rr[colMap.time]);
-        if (dp && tp) dt = new Date(Date.UTC(dp.y, dp.mo, dp.d, tp.h, tp.mi, tp.s));
+        if (dp && tp) dt = new Date(dp.y, dp.mo, dp.d, tp.h, tp.mi, tp.s);
       }
       var brix = typeof brixRaw === "number" ? brixRaw : parseFloat(brixRaw);
       if (!fid || String(fid).trim() === "" || !dt || isNaN(brix)){ skipped++; continue; }
-      rows.push({ ferment_id: String(fid).trim(), ts: dt.getTime(), brix: brix });
+      var tempRaw = colMap.temp !== undefined ? rr[colMap.temp] : "";
+      var temp = typeof tempRaw === "number" ? tempRaw : parseFloat(tempRaw);
+      rows.push({ ferment_id: String(fid).trim(), ts: dt.getTime(), brix: brix, temp: isNaN(temp) ? null : temp });
     }
     return { rows: rows, skipped: skipped, error: null };
   }
@@ -473,7 +487,7 @@
     var ferments = Object.keys(groups).sort().map(function(id){
       var recs = groups[id].slice().sort(function(a,b){ return a.ts - b.ts; });
       var t0 = recs[0].ts;
-      var readings = recs.map(function(r){ return { day: (r.ts - t0)/86400000, brix: r.brix, ts: r.ts }; });
+      var readings = recs.map(function(r){ return { day: (r.ts - t0)/86400000, brix: r.brix, ts: r.ts, temp: r.temp == null ? null : r.temp }; });
       var f = { id: id, readings: readings, t0: t0, latest: readings[readings.length-1] };
 
       if (readings.length >= 2){
@@ -541,9 +555,10 @@
     return el;
   }
   function buildDetailChart(ferment, tooltipEl, wrapEl){
+    var hasTemp = ferment.readings.some(function(r){ return r.temp != null; });
     var svg = svgEl("svg", { viewBox:"0 0 620 300", role:"img",
-      "aria-label": "Fitted Brix decline curve for " + ferment.id });
-    var W=620,H=300,mL=44,mR=14,mT=14,mB=32;
+      "aria-label": "Fitted Brix decline curve for " + ferment.id + (hasTemp ? ", with temperature readings on a right-hand axis" : "") });
+    var W=620,H=300,mL=44,mR=hasTemp?48:14,mT=14,mB=32;
     var plotW=W-mL-mR, plotH=H-mT-mB;
     var theta = ferment.theta;
     var days = ferment.readings.map(function(r){ return r.day; });
@@ -577,6 +592,21 @@
     var yt = svgEl("text", { class:"axis-title", x:12, y:mT+plotH/2, "text-anchor":"middle", transform:"rotate(-90 12 "+(mT+plotH/2)+")" });
     yt.textContent = "seq Brix"; svg.appendChild(yt);
 
+    var T_MIN = 20, T_MAX = 32;
+    function syT(t){ return mT + (1 - (t - T_MIN)/(T_MAX - T_MIN))*plotH; }
+    if (hasTemp){
+      var axX = mL + plotW;
+      svg.appendChild(svgEl("line", { class:"temp-axisline", x1:axX, x2:axX, y1:mT, y2:mT+plotH }));
+      for (var tv = T_MIN; tv <= T_MAX; tv += 2){
+        svg.appendChild(svgEl("line", { class:"temp-axisline", x1:axX, x2:axX+4, y1:syT(tv), y2:syT(tv) }));
+        var tl = svgEl("text", { class:"temp-axis-label", x:axX+7, y:syT(tv)+3, "text-anchor":"start" });
+        tl.textContent = tv; svg.appendChild(tl);
+      }
+      var ttl = svgEl("text", { class:"temp-axis-title", x:W-6, y:mT+plotH/2, "text-anchor":"middle",
+        transform:"rotate(90 "+(W-6)+" "+(mT+plotH/2)+")" });
+      ttl.textContent = "Temp (\u00B0C)"; svg.appendChild(ttl);
+    }
+
     var bandClass = { "10%":"band10", "50%":"band50", "0":"band0" };
     var markerClass = { "10%":"marker10", "50%":"marker50", "0":"marker0" };
     ferment.milestones.forEach(function(m){
@@ -596,6 +626,25 @@
     }
     hLine(brix10, "var(--blue-deep)", "10% drop: " + brix10.toFixed(1) + " Brix");
     hLine(brix50, "var(--ink2)", "50% drop: " + brix50.toFixed(1) + " Brix");
+
+    if (hasTemp){
+      ferment.readings.forEach(function(r){
+        if (r.temp == null) return;
+        var off = r.temp < T_MIN || r.temp > T_MAX;
+        var cx = sx(r.day), cy = Math.min(Math.max(syT(r.temp), mT), mT+plotH), d = 5;
+        var dia = svgEl("polygon", { class:"temp-point" + (off ? " off" : ""),
+          points: [cx+","+(cy-d), (cx+d)+","+cy, cx+","+(cy+d), (cx-d)+","+cy].join(" ") });
+        if (tooltipEl && wrapEl){
+          dia.addEventListener("mouseenter", function(){
+            var cRect = dia.getBoundingClientRect(), wRect = wrapEl.getBoundingClientRect();
+            tooltipEl.innerHTML = '<div class="tt-date">' + fmtDate(r.ts) + '</div><div class="tt-temp">' + r.temp.toFixed(1) + ' \u00B0C' + (off ? ' (off-scale)' : '') + '</div>';
+            positionTooltip(cRect.left + cRect.width/2 - wRect.left, cRect.top - wRect.top);
+          });
+          dia.addEventListener("mouseleave", function(){ tooltipEl.hidden = true; });
+        }
+        svg.appendChild(dia);
+      });
+    }
 
     var pts = [], N=140;
     for (var i=0;i<=N;i++){
@@ -767,6 +816,7 @@
           left.appendChild(tooltip);
           var legend = document.createElement("div"); legend.className = "detail-legend";
           legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span><span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-b10"></i>10% window</span><span><i class="swatch sw-b50"></i>50% window</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix window</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--blue-deep)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ink2)"></i>50% Brix value</span>';
+          if (f.readings.some(function(r){ return r.temp != null; })) legend.innerHTML += '<span><i class="swatch sw-temp"></i>Temperature (right axis, 20\u201332 \u00B0C)</span>';
           left.appendChild(legend);
           var stats = document.createElement("p"); stats.className = "detail-stats";
           stats.textContent = "fitted U="+f.theta[0].toFixed(1)+" L="+f.theta[1].toFixed(1)+" t50="+f.theta[2].toFixed(2)+"d s="+f.theta[3].toFixed(2);
@@ -897,7 +947,11 @@
     {ferment_id:"VP41-NN-2", dt:"2026-09-08T09:00", brix:19.7}
   ];
   function loadSample(){
-    var rows = SAMPLE_ROWS.map(function(r){ return { ferment_id:r.ferment_id, ts:new Date(r.dt).getTime(), brix:r.brix }; });
+    var rows = SAMPLE_ROWS.map(function(r){
+      var d = new Date(r.dt), h = d.getHours() + d.getMinutes()/60;
+      var temp = Math.round((25.5 + 1.3*Math.sin(2*Math.PI*(h-8)/24)) * 10) / 10;
+      return { ferment_id:r.ferment_id, ts:d.getTime(), brix:r.brix, temp:temp };
+    });
     showMsg("Loaded sample data — 4 ferments in different stages of monitoring.", true);
     loadRows(rows);
   }
