@@ -123,6 +123,20 @@
   .pill-insufficient{background:var(--status-pending-bg);color:var(--status-pending);}
   .pill-complete{background:var(--surface-2);color:var(--ink-faint);}
 
+  .sample-badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;margin-top:3px;padding:1px 7px 1px 6px;border-radius:99px;white-space:nowrap;}
+  .sample-badge::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;}
+  .sample-badge.done{background:var(--status-ready-bg);color:var(--status-ready);}
+  .sample-badge.needed{background:var(--status-pending-bg);color:var(--status-pending);}
+
+  .filter-bar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.85rem 1rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:.9rem;}
+  .filter-bar .fb-label{font-size:11.5px;color:var(--ink-muted);font-weight:600;margin-right:.2rem;}
+  .filter-chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:99px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink-muted);cursor:pointer;}
+  .filter-chip .fc-count{font-variant-numeric:tabular-nums;background:var(--surface-2);color:var(--ink);padding:0 6px;border-radius:99px;font-size:11px;}
+  .filter-chip.active{background:var(--status-pending-bg);border-color:var(--status-pending);color:var(--status-pending);}
+  .filter-chip.active .fc-count{background:var(--status-pending);color:#fff;}
+  .filter-chip:disabled{opacity:.45;cursor:default;}
+  .filter-clear{background:none;border:none;color:var(--ink-faint);text-decoration:underline;text-underline-offset:2px;font-size:12px;cursor:pointer;padding:4px 2px;margin-left:auto;}
+
   .chevron{color:var(--ink-faint);font-size:11px;transition:transform .15s;display:inline-block;}
   @media (prefers-reduced-motion:reduce){.chevron{transition:none;}}
   tr[aria-expanded="true"] .chevron{transform:rotate(90deg);}
@@ -202,7 +216,7 @@
   <div class="content">
   <div class="dropzone" id="dropzone">
     <p class="dz-title">Drop your readings spreadsheet here</p>
-    <p>.xlsx, .xls, or .csv — columns <code>ferment_id</code>, <code>date</code>, <code>time</code>, <code>brix</code> (or a single <code>datetime</code> column); optional <code>temp_c</code></p>
+    <p>.xlsx, .xls, or .csv — columns <code>ferment_id</code>, <code>date</code>, <code>time</code>, <code>brix</code> (or a single <code>datetime</code> column); optional <code>temp_c</code>, <code>sample_10</code>, <code>sample_50</code>, <code>sample_end</code></p>
     <div class="dz-actions">
       <button type="button" class="btn btn-primary" id="chooseBtn">Choose file</button>
       <button type="button" class="btn btn-ghost" id="sampleBtn">Load sample data</button>
@@ -219,6 +233,7 @@
 
   <div id="summarySection" hidden>
     <section class="summary" id="summary"></section>
+    <div class="filter-bar" id="filterBar" hidden></div>
     <section class="table-section">
       <div class="table-wrap">
         <table id="fermentTable">
@@ -245,6 +260,7 @@
   <footer class="colophon">
     <p>Model: <code>brix(t) = L + (U−L) / (1 + exp((t−t50)/s))</code>, a 4-parameter logistic fit, one per ferment. Each fit is a MAP (maximum a posteriori) estimate combining that ferment's own readings with priors from 24 historical replicate curves (U = 25.7 ± 0.6, L = −1.45 ± 0.32, s = 1.18 ± 0.22, noise ≈ 0.68 Brix), so sparse early data shrinks toward known ferment shape and rate instead of overfitting. The midpoint (t50 = 3.43&nbsp;d historically) is deliberately held loosely — its prior SD is widened to 2.5&nbsp;d — so a ferment with a genuinely delayed onset can shift its whole predicted curve later once readings show the lag, rather than the model assuming typical timing regardless of evidence. Zero-Brix timing is only defined once a ferment's fitted plateau (L) is below zero — until then it reads "plateau &gt; 0".</p>
     <p>Temperature (optional <code>temp_c</code> column) is plotted exactly as recorded on its own right-hand axis, fixed at 20–32&nbsp;°C — it is not modelled, and readings outside that range are pinned to the axis edge (hollow marker) with the true value in the hover tooltip.</p>
+    <p>Sampling (optional <code>sample_10</code> / <code>sample_50</code> / <code>sample_end</code> columns, any truthy value such as TRUE, yes, x, or 1 on any row for that ferment): a milestone counts as crossed once the <em>actual</em> latest reading is at or below that threshold relative to the ferment's own first reading (90%/50%/0% of the starting Brix) — not the model's prediction, so it only flags once you've really measured it. A crossed milestone without a matching sample flag shows a "Needs sample" badge, and the filter bar above the table lets you isolate ferments still waiting on a 10%, 50%, or end sample.</p>
       <p>Everything runs client-side in your browser via <a href="https://sheetjs.com/" target="_blank" rel="noopener">SheetJS</a> — no data leaves your machine. Fork or host this page as-is on GitHub Pages.</p>
   </footer>
   </div>
@@ -385,8 +401,18 @@
     date: ["date","reading_date","sample_date"],
     time: ["time","reading_time","sample_time","clock_time"],
     brix: ["brix","seq_brix","seqbrix","brix_value","reading"],
-    temp: ["temp","temp_c","temp_degc","temperature","temperature_c","temperature_degc","temp_deg_c"]
+    temp: ["temp","temp_c","temp_degc","temperature","temperature_c","temperature_degc","temp_deg_c"],
+    sample10: ["sample_10","sample10","sampled_10","s10","10_sample","sample_10pct","sample_10_pct"],
+    sample50: ["sample_50","sample50","sampled_50","s50","50_sample","sample_50pct","sample_50_pct"],
+    sampleEnd: ["sample_end","sampled_end","end_sample","sample_final","final_sample","sampleend"]
   };
+  function parseBoolFlag(cell){
+    if (cell === true) return true;
+    if (cell === false || cell == null) return false;
+    if (typeof cell === "number") return cell !== 0;
+    var s = String(cell).trim().toLowerCase();
+    return s === "true" || s === "yes" || s === "y" || s === "1" || s === "x" || s === "done" || s === "sampled";
+  }
   function normalizeHeader(h){ return String(h).trim().toLowerCase().replace(/[^a-z0-9]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,""); }
   function matchField(headerNorm){
     for (var field in FIELD_ALIASES){
@@ -470,7 +496,10 @@
       if (!fid || String(fid).trim() === "" || !dt || isNaN(brix)){ skipped++; continue; }
       var tempRaw = colMap.temp !== undefined ? rr[colMap.temp] : "";
       var temp = typeof tempRaw === "number" ? tempRaw : parseFloat(tempRaw);
-      rows.push({ ferment_id: String(fid).trim(), ts: dt.getTime(), brix: brix, temp: isNaN(temp) ? null : temp });
+      rows.push({ ferment_id: String(fid).trim(), ts: dt.getTime(), brix: brix, temp: isNaN(temp) ? null : temp,
+        sample10: colMap.sample10 !== undefined && parseBoolFlag(rr[colMap.sample10]),
+        sample50: colMap.sample50 !== undefined && parseBoolFlag(rr[colMap.sample50]),
+        sampleEnd: colMap.sampleEnd !== undefined && parseBoolFlag(rr[colMap.sampleEnd]) });
     }
     return { rows: rows, skipped: skipped, error: null };
   }
@@ -487,8 +516,20 @@
     var ferments = Object.keys(groups).sort().map(function(id){
       var recs = groups[id].slice().sort(function(a,b){ return a.ts - b.ts; });
       var t0 = recs[0].ts;
-      var readings = recs.map(function(r){ return { day: (r.ts - t0)/86400000, brix: r.brix, ts: r.ts, temp: r.temp == null ? null : r.temp }; });
+      var readings = recs.map(function(r){ return { day: (r.ts - t0)/86400000, brix: r.brix, ts: r.ts, temp: r.temp == null ? null : r.temp,
+        sample10: !!r.sample10, sample50: !!r.sample50, sampleEnd: !!r.sampleEnd }; });
       var f = { id: id, readings: readings, t0: t0, latest: readings[readings.length-1] };
+
+      f.sampled10 = readings.some(function(r){ return r.sample10; });
+      f.sampled50 = readings.some(function(r){ return r.sample50; });
+      f.sampledEnd = readings.some(function(r){ return r.sampleEnd; });
+      var firstBrix = readings[0].brix;
+      f.crossed10 = readings.length >= 2 && f.latest.brix <= firstBrix * 0.9;
+      f.crossed50 = readings.length >= 2 && f.latest.brix <= firstBrix * 0.5;
+      f.crossedEnd = readings.length >= 2 && f.latest.brix <= 0;
+      f.needs10 = f.crossed10 && !f.sampled10;
+      f.needs50 = f.crossed50 && !f.sampled50;
+      f.needsEnd = f.crossedEnd && !f.sampledEnd;
 
       if (readings.length >= 2){
         var t = readings.map(function(r){ return r.day; });
@@ -711,11 +752,66 @@
   var summarySection = document.getElementById("summarySection");
   var emptyState = document.getElementById("emptyState");
   var summaryEl = document.getElementById("summary");
+  var filterBarEl = document.getElementById("filterBar");
   var bodyEl = document.getElementById("fermentBody");
+  var activeSampleFilters = { s10:false, s50:false, send:false };
+  var lastFerments = [];
+
+  function passesSampleFilter(f){
+    if (!activeSampleFilters.s10 && !activeSampleFilters.s50 && !activeSampleFilters.send) return true;
+    return (activeSampleFilters.s10 && f.needs10) || (activeSampleFilters.s50 && f.needs50) || (activeSampleFilters.send && f.needsEnd);
+  }
+
+  function renderFilterBar(ferments){
+    var n10 = ferments.filter(function(f){ return f.needs10; }).length;
+    var n50 = ferments.filter(function(f){ return f.needs50; }).length;
+    var nEnd = ferments.filter(function(f){ return f.needsEnd; }).length;
+    if (n10 + n50 + nEnd === 0 && !activeSampleFilters.s10 && !activeSampleFilters.s50 && !activeSampleFilters.send){
+      filterBarEl.hidden = true; filterBarEl.innerHTML = ""; return;
+    }
+    filterBarEl.hidden = false;
+    function chip(key, label, count){
+      var active = activeSampleFilters[key];
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "filter-chip" + (active ? " active" : "");
+      btn.innerHTML = label + ' <span class="fc-count">' + count + '</span>';
+      btn.disabled = count === 0 && !active;
+      btn.addEventListener("click", function(){
+        activeSampleFilters[key] = !activeSampleFilters[key];
+        renderFilterBar(lastFerments);
+        renderTableBody(lastFerments);
+      });
+      return btn;
+    }
+    filterBarEl.innerHTML = "";
+    var label = document.createElement("span"); label.className = "fb-label"; label.textContent = "Remaining to sample:";
+    filterBarEl.appendChild(label);
+    filterBarEl.appendChild(chip("s10", "Needs 10% sample", n10));
+    filterBarEl.appendChild(chip("s50", "Needs 50% sample", n50));
+    filterBarEl.appendChild(chip("send", "Needs end sample", nEnd));
+    if (activeSampleFilters.s10 || activeSampleFilters.s50 || activeSampleFilters.send){
+      var clearBtn = document.createElement("button");
+      clearBtn.type = "button"; clearBtn.className = "filter-clear"; clearBtn.textContent = "Clear filter";
+      clearBtn.addEventListener("click", function(){
+        activeSampleFilters.s10 = activeSampleFilters.s50 = activeSampleFilters.send = false;
+        renderFilterBar(lastFerments);
+        renderTableBody(lastFerments);
+      });
+      filterBarEl.appendChild(clearBtn);
+    }
+  }
+
+  function sampleBadge(sampled, needed){
+    if (sampled) return '<span class="sample-badge done">Sampled</span>';
+    if (needed) return '<span class="sample-badge needed">Needs sample</span>';
+    return "";
+  }
 
   function render(ferments){
+    lastFerments = ferments;
     if (!ferments.length){
-      summarySection.hidden = true; emptyState.hidden = false; return;
+      summarySection.hidden = true; emptyState.hidden = false; filterBarEl.hidden = true; return;
     }
     summarySection.hidden = false; emptyState.hidden = true;
 
@@ -748,8 +844,22 @@
     }
     summaryEl.appendChild(nextTile);
 
+    renderFilterBar(ferments);
+    renderTableBody(ferments);
+  }
+
+  function renderTableBody(ferments){
+    var visible = ferments.filter(passesSampleFilter);
     bodyEl.innerHTML = "";
-    ferments.forEach(function(f){
+    if (!visible.length){
+      var trEmpty = document.createElement("tr");
+      var tdEmpty = document.createElement("td"); tdEmpty.colSpan = 9; tdEmpty.className = "muted";
+      tdEmpty.style.textAlign = "center"; tdEmpty.style.padding = "1.5rem";
+      tdEmpty.textContent = "No ferments match the current filter.";
+      trEmpty.appendChild(tdEmpty); bodyEl.appendChild(trEmpty);
+      return;
+    }
+    visible.forEach(function(f){
       var tr = document.createElement("tr");
       tr.className = "ferment-row";
       tr.tabIndex = 0;
@@ -774,7 +884,7 @@
       var tdTrend = document.createElement("td");
       if (f.theta) tdTrend.appendChild(buildSparkline(f)); else tdTrend.innerHTML = '<span class="muted">—</span>';
 
-      function milestoneTd(m){
+      function milestoneTd(m, sampled, needed){
         var td = document.createElement("td");
         if (!m){ td.innerHTML = '<span class="muted">—</span>'; return td; }
         var absTs = f.t0 + m.p.day*86400000;
@@ -782,13 +892,15 @@
         var d = document.createElement("span"); d.className = "d mono"; d.textContent = fmtDate(absTs);
         var rel = document.createElement("span"); rel.className = "rel"; rel.textContent = fmtRelative(absTs);
         wrap.appendChild(d); wrap.appendChild(rel);
+        var badge = sampleBadge(sampled, needed);
+        if (badge) wrap.insertAdjacentHTML("beforeend", badge);
         td.appendChild(wrap);
         return td;
       }
       tr.appendChild(tdChevron); tr.appendChild(tdId); tr.appendChild(tdN); tr.appendChild(tdLatest); tr.appendChild(tdTrend);
-      tr.appendChild(milestoneTd(f.pred10 ? {p:f.pred10} : null));
-      tr.appendChild(milestoneTd(f.pred50 ? {p:f.pred50} : null));
-      if (f.predZero) tr.appendChild(milestoneTd({p:f.predZero}));
+      tr.appendChild(milestoneTd(f.pred10 ? {p:f.pred10} : null, f.sampled10, f.needs10));
+      tr.appendChild(milestoneTd(f.pred50 ? {p:f.pred50} : null, f.sampled50, f.needs50));
+      if (f.predZero) tr.appendChild(milestoneTd({p:f.predZero}, f.sampledEnd, f.needsEnd));
       else { var tdz = document.createElement("td"); tdz.innerHTML = f.readings.length>=2 ? '<span class="muted">plateau &gt; 0</span>' : '<span class="muted">—</span>'; tr.appendChild(tdz); }
 
       var tdStatus = document.createElement("td");
