@@ -100,6 +100,8 @@
   .next-list li{display:flex;justify-content:space-between;gap:.75rem;}
   .next-list .nf-id{font-weight:700;color:var(--blue-deep);}
   .next-list .nf-when{color:var(--ink-muted);font-weight:400;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .next-list.past-due .nf-id{color:var(--danger);}
+  .past-due-label{color:var(--danger) !important;}
 
   .table-section{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
   .table-wrap{overflow-x:auto;}
@@ -260,7 +262,7 @@
   <footer class="colophon">
     <p>Model: <code>brix(t) = L + (U−L) / (1 + exp((t−t50)/s))</code>, a 4-parameter logistic fit, one per ferment. Each fit is a MAP (maximum a posteriori) estimate combining that ferment's own readings with priors from 24 historical replicate curves (U = 25.7 ± 0.6, L = −1.45 ± 0.32, s = 1.18 ± 0.22, noise ≈ 0.68 Brix), so sparse early data shrinks toward known ferment shape and rate instead of overfitting. The midpoint (t50 = 3.43&nbsp;d historically) is deliberately held loosely — its prior SD is widened to 2.5&nbsp;d — so a ferment with a genuinely delayed onset can shift its whole predicted curve later once readings show the lag, rather than the model assuming typical timing regardless of evidence. Zero-Brix timing is only defined once a ferment's fitted plateau (L) is below zero — until then it reads "plateau &gt; 0".</p>
     <p>Temperature (optional <code>temp_c</code> column) is plotted exactly as recorded on its own right-hand axis, fixed at 20–32&nbsp;°C — it is not modelled, and readings outside that range are pinned to the axis edge (hollow marker) with the true value in the hover tooltip.</p>
-    <p>Sampling (optional <code>sample_10</code> / <code>sample_50</code> / <code>sample_end</code> columns, any truthy value such as TRUE, yes, x, or 1 on any row for that ferment): a milestone counts as crossed once the <em>actual</em> latest reading is at or below that threshold relative to the ferment's own first reading (90%/50%/0% of the starting Brix) — not the model's prediction, so it only flags once you've really measured it. A crossed milestone without a matching sample flag shows a "Needs sample" badge, and the filter bar above the table lets you isolate ferments still waiting on a 10%, 50%, or end sample.</p>
+    <p>Sampling (optional <code>sample_10</code> / <code>sample_50</code> / <code>sample_end</code> columns, any truthy value such as TRUE, yes, x, or 1 on any row for that ferment): every ferment needs all three physical samples pulled eventually, so a "Needs sample" badge shows for any ferment that doesn't yet have that column checked — regardless of where its Brix curve actually is, since a paired or control ferment may need sampling on a schedule that has nothing to do with its own reading. The filter bar above the table lets you isolate ferments still outstanding on a 10%, 50%, or end sample; it clears once you log the flag in your spreadsheet and re-upload.</p>
       <p>Everything runs client-side in your browser via <a href="https://sheetjs.com/" target="_blank" rel="noopener">SheetJS</a> — no data leaves your machine. Fork or host this page as-is on GitHub Pages.</p>
   </footer>
   </div>
@@ -523,13 +525,13 @@
       f.sampled10 = readings.some(function(r){ return r.sample10; });
       f.sampled50 = readings.some(function(r){ return r.sample50; });
       f.sampledEnd = readings.some(function(r){ return r.sampleEnd; });
-      var firstBrix = readings[0].brix;
-      f.crossed10 = readings.length >= 2 && f.latest.brix <= firstBrix * 0.9;
-      f.crossed50 = readings.length >= 2 && f.latest.brix <= firstBrix * 0.5;
-      f.crossedEnd = readings.length >= 2 && f.latest.brix <= 0;
-      f.needs10 = f.crossed10 && !f.sampled10;
-      f.needs50 = f.crossed50 && !f.sampled50;
-      f.needsEnd = f.crossedEnd && !f.sampledEnd;
+      // "Needs sample" tracks the sample_10/50/end checklist columns only -- every ferment
+      // eventually needs all three pulled, so this is a flat to-do, not gated on Brix having
+      // crossed that milestone yet (confirmed: even flat/control ferments should still show up
+      // as outstanding until logged).
+      f.needs10 = !f.sampled10;
+      f.needs50 = !f.sampled50;
+      f.needsEnd = !f.sampledEnd;
 
       if (readings.length >= 2){
         var t = readings.map(function(r){ return r.day; });
@@ -554,9 +556,19 @@
           .sort(function(a,b){ return a.absTs - b.absTs; });
         f.nextUpcoming = upcoming.length ? upcoming[0] : null;
         f.status = f.nextUpcoming ? "ready" : "complete";
+
+        // Predicted date has already passed, but the sample_10/50/end column for that
+        // milestone still isn't checked -- flagged separately from "due within 24h" since
+        // this means action may already be needed, not just coming up.
+        var needsMap = { "10%": f.needs10, "50%": f.needs50, "0": f.needsEnd };
+        f.pastDueUnsampled = f.milestones
+          .map(function(m){ return { m: m, absTs: t0 + m.p.day*86400000 }; })
+          .filter(function(x){ return x.absTs <= now && needsMap[x.m.key]; })
+          .sort(function(a,b){ return a.absTs - b.absTs; });
       } else {
         f.status = "insufficient";
         f.nextUpcoming = null;
+        f.pastDueUnsampled = [];
       }
       return f;
     });
@@ -822,6 +834,12 @@
     var DAY_MS = 24*3600000;
     var within24 = withUpcoming.filter(function(f){ return (f.nextUpcoming.absTs - Date.now()) <= DAY_MS; });
 
+    var pastDue = [];
+    ferments.forEach(function(f){
+      f.pastDueUnsampled.forEach(function(x){ pastDue.push({ f: f, x: x }); });
+    });
+    pastDue.sort(function(a,b){ return a.x.absTs - b.x.absTs; });
+
     summaryEl.innerHTML = "";
     function stat(n,l){ var d=document.createElement("div"); d.className="stat-tile";
       d.innerHTML = '<div class="n">'+n+'</div><div class="l">'+l+'</div>'; return d; }
@@ -829,19 +847,27 @@
     summaryEl.appendChild(stat(readyCount, "Predictions ready"));
     summaryEl.appendChild(stat(insufCount, "Need more readings"));
     var nextTile = document.createElement("div"); nextTile.className = "stat-tile next-tile";
+    var html = "";
+    if (pastDue.length){
+      var pastItems = pastDue.map(function(p){
+        return '<li><span class="nf-id">'+p.f.id+'</span> — '+p.x.m.label+' <span class="nf-when">'+fmtDate(p.x.absTs)+' ('+fmtRelative(p.x.absTs)+')</span></li>';
+      }).join("");
+      html += '<ul class="next-list past-due">'+pastItems+'</ul><div class="l past-due-label">Potentially past due — predicted, not logged as sampled ('+pastDue.length+')</div>';
+    }
     if (within24.length){
       var items = within24.map(function(f){
         var ts = f.t0 + f.nextUpcoming.m.p.day*86400000;
         return '<li><span class="nf-id">'+f.id+'</span> — '+f.nextUpcoming.m.label+' <span class="nf-when">'+fmtDate(ts)+' ('+fmtRelative(ts)+')</span></li>';
       }).join("");
-      nextTile.innerHTML = '<ul class="next-list">'+items+'</ul><div class="l">Due within 24h ('+within24.length+')</div>';
+      html += '<ul class="next-list"'+(pastDue.length?' style="margin-top:.6rem;"':'')+'>'+items+'</ul><div class="l">Due within 24h ('+within24.length+')</div>';
     } else if (withUpcoming.length){
       var soonest = withUpcoming[0];
       var sts = soonest.t0 + soonest.nextUpcoming.m.p.day*86400000;
-      nextTile.innerHTML = '<div class="n">Nothing due within 24h. Next up: <code>'+soonest.id+'</code> — '+soonest.nextUpcoming.m.label+', '+fmtDate(sts)+' ('+fmtRelative(sts)+')</div><div class="l">Soonest upcoming milestone</div>';
-    } else {
-      nextTile.innerHTML = '<div class="n">No upcoming milestones — all ferments are either complete or awaiting more readings.</div><div class="l">Soonest upcoming milestone</div>';
+      html += '<div class="n"'+(pastDue.length?' style="margin-top:.6rem;"':'')+'>Nothing due within 24h. Next up: <code>'+soonest.id+'</code> — '+soonest.nextUpcoming.m.label+', '+fmtDate(sts)+' ('+fmtRelative(sts)+')</div><div class="l">Soonest upcoming milestone</div>';
+    } else if (!pastDue.length){
+      html += '<div class="n">No upcoming milestones — all ferments are either complete or awaiting more readings.</div><div class="l">Soonest upcoming milestone</div>';
     }
+    nextTile.innerHTML = html;
     summaryEl.appendChild(nextTile);
 
     renderFilterBar(ferments);
@@ -886,7 +912,11 @@
 
       function milestoneTd(m, sampled, needed){
         var td = document.createElement("td");
-        if (!m){ td.innerHTML = '<span class="muted">—</span>'; return td; }
+        if (!m){
+          var badgeOnly = sampleBadge(sampled, needed);
+          td.innerHTML = '<span class="muted">—</span>' + (badgeOnly ? '<div>' + badgeOnly + '</div>' : '');
+          return td;
+        }
         var absTs = f.t0 + m.p.day*86400000;
         var wrap = document.createElement("div"); wrap.className = "cell-date";
         var d = document.createElement("span"); d.className = "d mono"; d.textContent = fmtDate(absTs);
@@ -901,7 +931,12 @@
       tr.appendChild(milestoneTd(f.pred10 ? {p:f.pred10} : null, f.sampled10, f.needs10));
       tr.appendChild(milestoneTd(f.pred50 ? {p:f.pred50} : null, f.sampled50, f.needs50));
       if (f.predZero) tr.appendChild(milestoneTd({p:f.predZero}, f.sampledEnd, f.needsEnd));
-      else { var tdz = document.createElement("td"); tdz.innerHTML = f.readings.length>=2 ? '<span class="muted">plateau &gt; 0</span>' : '<span class="muted">—</span>'; tr.appendChild(tdz); }
+      else {
+        var tdz = document.createElement("td");
+        var zBadge = sampleBadge(f.sampledEnd, f.needsEnd);
+        tdz.innerHTML = (f.readings.length>=2 ? '<span class="muted">plateau &gt; 0</span>' : '<span class="muted">—</span>') + (zBadge ? '<div>' + zBadge + '</div>' : '');
+        tr.appendChild(tdz);
+      }
 
       var tdStatus = document.createElement("td");
       var pillCls = f.status === "ready" ? "pill-ready" : (f.status === "complete" ? "pill-complete" : "pill-insufficient");
