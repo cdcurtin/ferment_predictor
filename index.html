@@ -151,11 +151,13 @@
   .chart-tooltip{position:absolute;pointer-events:none;transform:translate(-50%,-100%);background:var(--surface);border:1px solid var(--border-strong);border-radius:6px;padding:5px 8px;font-size:11.5px;line-height:1.4;white-space:nowrap;z-index:2;}
   .chart-tooltip .tt-date{color:var(--ink-muted);}
   .chart-tooltip .tt-brix{font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink);}
+  .chart-tooltip .tt-sampled{color:var(--status-ready);font-weight:600;}
   .detail-stats{font-size:11.5px;color:var(--ink-faint);margin:.5rem 0 0;font-variant-numeric:tabular-nums;}
   .detail-legend{display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:11.5px;color:var(--ink-muted);margin-top:.4rem;}
   .detail-legend span{display:inline-flex;align-items:center;gap:5px;}
   .swatch{width:10px;height:10px;border-radius:3px;display:inline-block;}
   .sw-point{background:var(--ink2);}
+  .sw-point-sampled{background:var(--status-ready);}
   .sw-line{background:var(--blue);}
   .sw-b10{background:var(--blue);opacity:.4;}
   .sw-b50{background:var(--ink2);opacity:.4;}
@@ -174,6 +176,8 @@
   .curve{stroke:var(--blue);stroke-width:2.3;fill:none;}
   .point{fill:var(--ink2);stroke:var(--surface);stroke-width:1.3;cursor:pointer;}
   .point:hover{r:6;}
+  .point-sampled{fill:var(--status-ready);stroke:var(--surface);stroke-width:1.6;}
+  .point-sampled:hover{r:7;}
   .temp-point{fill:var(--temp);stroke:var(--surface);stroke-width:1.2;cursor:pointer;}
   .temp-point.off{fill:var(--surface);stroke:var(--temp);stroke-width:1.6;}
   .temp-axis-label{font-size:10px;fill:var(--temp);}
@@ -729,12 +733,18 @@
     }
 
     ferment.readings.forEach(function(r){
-      var circle = svgEl("circle", { class:"point", cx:sx(r.day), cy:sy(r.brix), r:4 });
+      var sampleLabels = [];
+      if (r.sample10) sampleLabels.push("10%");
+      if (r.sample50) sampleLabels.push("50%");
+      if (r.sampleEnd) sampleLabels.push("end");
+      var isSampled = sampleLabels.length > 0;
+      var circle = svgEl("circle", { class:"point" + (isSampled ? " point-sampled" : ""), cx:sx(r.day), cy:sy(r.brix), r: isSampled ? 5 : 4 });
       if (tooltipEl && wrapEl){
         circle.addEventListener("mouseenter", function(){
           var cRect = circle.getBoundingClientRect();
           var wRect = wrapEl.getBoundingClientRect();
-          tooltipEl.innerHTML = '<div class="tt-date">' + fmtDate(r.ts) + '</div><div class="tt-brix">' + r.brix.toFixed(1) + ' Brix</div>';
+          tooltipEl.innerHTML = '<div class="tt-date">' + fmtDate(r.ts) + '</div><div class="tt-brix">' + r.brix.toFixed(1) + ' Brix</div>'
+            + (isSampled ? '<div class="tt-sampled">Sampled: ' + sampleLabels.join(", ") + '</div>' : '');
           positionTooltip(cRect.left + cRect.width/2 - wRect.left, cRect.top - wRect.top);
         });
         circle.addEventListener("mouseleave", function(){ tooltipEl.hidden = true; });
@@ -997,7 +1007,8 @@
           left.appendChild(buildDetailChart(f, tooltip, left));
           left.appendChild(tooltip);
           var legend = document.createElement("div"); legend.className = "detail-legend";
-          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span><span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-b10"></i>10% window</span><span><i class="swatch sw-b50"></i>50% window</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix window</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--blue-deep)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ink2)"></i>50% Brix value</span>';
+          var hasSampledPoint = f.readings.some(function(r){ return r.sample10 || r.sample50 || r.sampleEnd; });
+          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span>'+(hasSampledPoint?'<span><i class="swatch sw-point-sampled"></i>Sample taken here</span>':'')+'<span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-b10"></i>10% window</span><span><i class="swatch sw-b50"></i>50% window</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix window</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--blue-deep)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ink2)"></i>50% Brix value</span>';
           if (f.readings.some(function(r){ return r.temp != null; })) legend.innerHTML += '<span><i class="swatch sw-temp"></i>Temperature (right axis, 20\u201332 \u00B0C)</span>';
           left.appendChild(legend);
           var stats = document.createElement("p"); stats.className = "detail-stats";
