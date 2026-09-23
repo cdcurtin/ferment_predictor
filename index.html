@@ -235,6 +235,7 @@
 
   <div id="summarySection" hidden>
     <section class="summary" id="summary"></section>
+    <div class="filter-bar" id="sortBar"></div>
     <div class="filter-bar" id="filterBar" hidden></div>
     <section class="table-section">
       <div class="table-wrap">
@@ -507,6 +508,20 @@
   }
 
   // ---------- grouping + fitting ----------
+  function sortByPredictedOrder(a, b){
+    var pa = a.status === "insufficient" ? 0 : (a.status === "ready" ? 1 : 2);
+    var pb = b.status === "insufficient" ? 0 : (b.status === "ready" ? 1 : 2);
+    if (pa !== pb) return pa - pb;
+    if (pa === 0) return b.latest.ts - a.latest.ts;
+    if (pa === 1) return a.nextUpcoming.absTs - b.nextUpcoming.absTs;
+    return b.latest.ts - a.latest.ts;
+  }
+  var SORT_MODES = {
+    predicted: { label: "Predicted sampling order", cmp: sortByPredictedOrder },
+    brix: { label: "Current Brix (ascending)", cmp: function(a,b){ return a.latest.brix - b.latest.brix; } },
+    name: { label: "Treatment name", cmp: function(a,b){ return a.id.localeCompare(b.id, undefined, {numeric:true}); } }
+  };
+
   function buildFerments(rows, firstReadingWeight){
     firstReadingWeight = firstReadingWeight || 1.0;
     var groups = {};
@@ -573,14 +588,7 @@
       return f;
     });
 
-    ferments.sort(function(a,b){
-      var pa = a.status === "insufficient" ? 0 : (a.status === "ready" ? 1 : 2);
-      var pb = b.status === "insufficient" ? 0 : (b.status === "ready" ? 1 : 2);
-      if (pa !== pb) return pa - pb;
-      if (pa === 0) return b.latest.ts - a.latest.ts;
-      if (pa === 1) return a.nextUpcoming.absTs - b.nextUpcoming.absTs;
-      return b.latest.ts - a.latest.ts;
-    });
+    ferments.sort(sortByPredictedOrder);
     return ferments;
   }
 
@@ -765,13 +773,33 @@
   var emptyState = document.getElementById("emptyState");
   var summaryEl = document.getElementById("summary");
   var filterBarEl = document.getElementById("filterBar");
+  var sortBarEl = document.getElementById("sortBar");
   var bodyEl = document.getElementById("fermentBody");
   var activeSampleFilters = { s10:false, s50:false, send:false };
+  var currentSort = "predicted";
   var lastFerments = [];
 
   function passesSampleFilter(f){
     if (!activeSampleFilters.s10 && !activeSampleFilters.s50 && !activeSampleFilters.send) return true;
     return (activeSampleFilters.s10 && f.needs10) || (activeSampleFilters.s50 && f.needs50) || (activeSampleFilters.send && f.needsEnd);
+  }
+
+  function renderSortBar(){
+    sortBarEl.innerHTML = "";
+    var label = document.createElement("span"); label.className = "fb-label"; label.textContent = "Sort by:";
+    sortBarEl.appendChild(label);
+    Object.keys(SORT_MODES).forEach(function(key){
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "filter-chip" + (currentSort === key ? " active" : "");
+      btn.textContent = SORT_MODES[key].label;
+      btn.addEventListener("click", function(){
+        currentSort = key;
+        renderSortBar();
+        renderTableBody(lastFerments);
+      });
+      sortBarEl.appendChild(btn);
+    });
   }
 
   function renderFilterBar(ferments){
@@ -870,12 +898,14 @@
     nextTile.innerHTML = html;
     summaryEl.appendChild(nextTile);
 
+    renderSortBar();
     renderFilterBar(ferments);
     renderTableBody(ferments);
   }
 
   function renderTableBody(ferments){
     var visible = ferments.filter(passesSampleFilter);
+    visible = visible.slice().sort(SORT_MODES[currentSort].cmp);
     bodyEl.innerHTML = "";
     if (!visible.length){
       var trEmpty = document.createElement("tr");
