@@ -926,7 +926,12 @@
       var tdN = document.createElement("td"); tdN.className = "mono"; tdN.textContent = f.readings.length;
       var tdLatest = document.createElement("td");
       var latestWrap = document.createElement("div"); latestWrap.className = "cell-date";
-      var ld = document.createElement("span"); ld.className = "d mono"; ld.textContent = f.latest.brix.toFixed(1) + " Brix";
+      var ld = document.createElement("span"); ld.className = "d mono";
+      ld.textContent = f.latest.brix.toFixed(1) + " Brix";
+      if (f.readings.length >= 2){
+        var pctDrop = (f.readings[0].brix - f.latest.brix) / f.readings[0].brix * 100;
+        ld.textContent += " (" + (pctDrop >= 0 ? "+" : "") + pctDrop.toFixed(1) + "%)";
+      }
       var lr = document.createElement("span"); lr.className = "rel"; lr.textContent = fmtDate(f.latest.ts);
       latestWrap.appendChild(ld); latestWrap.appendChild(lr);
       var ageH = (Date.now() - f.latest.ts) / 3600000;
