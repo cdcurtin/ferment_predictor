@@ -159,6 +159,7 @@
   .sw-point{background:var(--ink2);}
   .sw-point-sampled{background:var(--status-ready);}
   .sw-line{background:var(--blue);}
+  .sw-accept{background:var(--status-ready);opacity:.4;}
   .sw-b10{background:var(--blue);opacity:.4;}
   .sw-b50{background:var(--ink2);opacity:.4;}
   .sw-b0{background:var(--danger);opacity:.4;}
@@ -187,6 +188,7 @@
   .sw-temp{background:var(--temp);border-radius:1px;transform:rotate(45deg) scale(.8);}
   .hline-label{font-size:10px;font-weight:700;paint-order:stroke;stroke-width:3px;stroke-linejoin:round;}
   .swatch-hline{width:14px;height:0;display:inline-block;}
+  .accept-band{fill:var(--status-ready);opacity:.13;}
   .band10{fill:var(--blue);opacity:.14;}
   .band50{fill:var(--ink2);opacity:.12;}
   .band0{fill:var(--danger);opacity:.14;}
@@ -635,8 +637,10 @@
     var firstBrix = ferment.readings[0].brix;
     var brix10 = firstBrix * 0.9;
     var brix50 = firstBrix * 0.5;
+    var brix8 = firstBrix * 0.92, brix12 = firstBrix * 0.88;
+    var brix45 = firstBrix * 0.55, brix55 = firstBrix * 0.45;
 
-    var rangeVals = brixVals.concat([theta[1], theta[0], brix10, brix50]);
+    var rangeVals = brixVals.concat([theta[1], theta[0], brix10, brix50, brix8, brix12, brix45, brix55]);
     var yMin = Math.floor((Math.min.apply(null, rangeVals)-2)/5)*5;
     var yMax = Math.ceil((Math.max.apply(null, rangeVals)+2)/5)*5;
     function sx(day){ return mL + (day/xMax)*plotW; }
@@ -671,6 +675,13 @@
         transform:"rotate(90 "+(W-6)+" "+(mT+plotH/2)+")" });
       ttl.textContent = "Temp (\u00B0C)"; svg.appendChild(ttl);
     }
+
+    function hAcceptBand(loBrix, hiBrix){
+      var y0 = sy(hiBrix), y1 = sy(loBrix);
+      svg.appendChild(svgEl("rect", { class:"accept-band", x:mL, y:y0, width:plotW, height:Math.max(y1-y0,0) }));
+    }
+    hAcceptBand(brix12, brix8);
+    hAcceptBand(brix55, brix45);
 
     var bandClass = { "10%":"band10", "50%":"band50", "0":"band0" };
     var markerClass = { "10%":"marker10", "50%":"marker50", "0":"marker0" };
@@ -1008,7 +1019,7 @@
           left.appendChild(tooltip);
           var legend = document.createElement("div"); legend.className = "detail-legend";
           var hasSampledPoint = f.readings.some(function(r){ return r.sample10 || r.sample50 || r.sampleEnd; });
-          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span>'+(hasSampledPoint?'<span><i class="swatch sw-point-sampled"></i>Sample taken here</span>':'')+'<span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-b10"></i>10% window</span><span><i class="swatch sw-b50"></i>50% window</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix window</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--blue-deep)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ink2)"></i>50% Brix value</span>';
+          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span>'+(hasSampledPoint?'<span><i class="swatch sw-point-sampled"></i>Sample taken here</span>':'')+'<span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-accept"></i>8–12% / 45–55% acceptable range</span><span><i class="swatch sw-b10"></i>10% predicted-date CI</span><span><i class="swatch sw-b50"></i>50% predicted-date CI</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix predicted-date CI</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--blue-deep)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ink2)"></i>50% Brix value</span>';
           if (f.readings.some(function(r){ return r.temp != null; })) legend.innerHTML += '<span><i class="swatch sw-temp"></i>Temperature (right axis, 20\u201332 \u00B0C)</span>';
           left.appendChild(legend);
           var stats = document.createElement("p"); stats.className = "detail-stats";
