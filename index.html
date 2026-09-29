@@ -213,7 +213,7 @@
     <div class="wrap">
       <p class="affil">Oregon State University · Curtin Lab · Fermentation Microbiology</p>
       <h1>Curtin Lab Wine Ferment Monitor</h1>
-      <p>Drop in a readings spreadsheet for up to dozens of ferments at once — get predicted 10%, 50%, and zero-Brix timings for every one, with the ferment that needs your attention soonest surfaced first.</p>
+      <p>Drop in a readings spreadsheet for up to dozens of ferments at once — get predicted 10%, 50%, and end-of-ferment (−2 Brix) timings for every one, with the ferment that needs your attention soonest surfaced first.</p>
       <div class="badges">
         <span class="hbadge">Model: <b>4-param logistic</b></span>
         <span class="hbadge">Priors from <b>24 replicate curves</b></span>
@@ -255,7 +255,7 @@
               <th>Trend</th>
               <th>10% drop</th>
               <th>50% drop</th>
-              <th>Zero Brix</th>
+              <th>End Brix (−2)</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -267,7 +267,7 @@
   <div class="empty-state" id="emptyState">No data loaded yet — drop a spreadsheet above, or load the sample dataset to see how it works.</div>
 
   <footer class="colophon">
-    <p>Model: <code>brix(t) = L + (U−L) / (1 + exp((t−t50)/s))</code>, a 4-parameter logistic fit, one per ferment. Each fit is a MAP (maximum a posteriori) estimate combining that ferment's own readings with priors from 24 historical replicate curves (U = 25.7 ± 0.6, L = −1.45 ± 0.32, s = 1.18 ± 0.22, noise ≈ 0.68 Brix), so sparse early data shrinks toward known ferment shape and rate instead of overfitting. The midpoint (t50 = 3.43&nbsp;d historically) is deliberately held loosely — its prior SD is widened to 2.5&nbsp;d — so a ferment with a genuinely delayed onset can shift its whole predicted curve later once readings show the lag, rather than the model assuming typical timing regardless of evidence. Zero-Brix timing is only defined once a ferment's fitted plateau (L) is below zero — until then it reads "plateau &gt; 0".</p>
+    <p>Model: <code>brix(t) = L + (U−L) / (1 + exp((t−t50)/s))</code>, a 4-parameter logistic fit, one per ferment. Each fit is a MAP (maximum a posteriori) estimate combining that ferment's own readings with priors from 24 historical replicate curves (U = 25.7 ± 0.6, L = −1.45 ± 0.32, s = 1.18 ± 0.22, noise ≈ 0.68 Brix), so sparse early data shrinks toward known ferment shape and rate instead of overfitting. The midpoint (t50 = 3.43&nbsp;d historically) is deliberately held loosely — its prior SD is widened to 2.5&nbsp;d — so a ferment with a genuinely delayed onset can shift its whole predicted curve later once readings show the lag, rather than the model assuming typical timing regardless of evidence. End-of-ferment timing targets −2 Brix (not literal zero) and is only defined once a ferment's fitted plateau (L) is below that target — until then it reads "plateau &gt; −2".</p>
     <p>Temperature (optional <code>temp_c</code> column) is plotted exactly as recorded on its own right-hand axis, fixed at 20–32&nbsp;°C — it is not modelled, and readings outside that range are pinned to the axis edge (hollow marker) with the true value in the hover tooltip.</p>
     <p>Sampling (optional <code>sample_10</code> / <code>sample_50</code> / <code>sample_end</code> columns, any truthy value such as TRUE, yes, x, or 1 on any row for that ferment): every ferment needs all three physical samples pulled eventually, so a "Needs sample" badge shows for any ferment that doesn't yet have that column checked — regardless of where its Brix curve actually is, since a paired or control ferment may need sampling on a schedule that has nothing to do with its own reading. The filter bar above the table lets you isolate ferments still outstanding on a 10%, 50%, or end sample; it clears once you log the flag in your spreadsheet and re-upload.</p>
       <p>Everything runs client-side in your browser via <a href="https://sheetjs.com/" target="_blank" rel="noopener">SheetJS</a> — no data leaves your machine. Fork or host this page as-is on GitHub Pages.</p>
@@ -392,11 +392,12 @@
     var se = Math.sqrt(Math.max(v, 0));
     return { day: day, se: se, lo: day - Z95*se, hi: day + Z95*se };
   }
-  function predictZero(theta, pcov){
+  var END_TARGET_BRIX = -2; // "end of ferment" target -- fitted plateau must cross this, not literal 0
+  function predictEnd(theta, pcov, target){
     var U = theta[0], L = theta[1], t50 = theta[2], s = theta[3];
-    if (!(L < -0.01 && U > 0.01)) return null; // plateau never reaches zero under this fit
-    var day = t50 + s * (Math.log(U) - Math.log(-L));
-    var grad = [ s/U, -s/L, 1, Math.log(U) - Math.log(-L) ];
+    if (!(L < target - 0.01 && U > target + 0.01)) return null; // plateau never reaches the target under this fit
+    var day = t50 + s * (Math.log(U - target) - Math.log(target - L));
+    var grad = [ s/(U-target), s/(target-L), 1, Math.log(U-target) - Math.log(target-L) ];
     var v = 0;
     if (pcov) for (var a = 0; a < 4; a++) for (var b = 0; b < 4; b++) v += grad[a] * pcov[a][b] * grad[b];
     var se = Math.sqrt(Math.max(v, 0));
@@ -561,7 +562,7 @@
         f.theta = fit.theta; f.pcov = fit.pcov;
         f.pred10 = predictFraction(fit.theta, fit.pcov, 0.10);
         f.pred50 = predictFraction(fit.theta, fit.pcov, 0.50);
-        f.predZero = predictZero(fit.theta, fit.pcov);
+        f.predZero = predictEnd(fit.theta, fit.pcov, END_TARGET_BRIX);
         f.pred10.absTsCache = t0 + f.pred10.day*86400000;
         f.pred50.absTsCache = t0 + f.pred50.day*86400000;
         if (f.predZero) f.predZero.absTsCache = t0 + f.predZero.day*86400000;
@@ -569,7 +570,7 @@
           { key:"10%", label:"10% drop", p: f.pred10 },
           { key:"50%", label:"50% drop", p: f.pred50 }
         ];
-        if (f.predZero) f.milestones.push({ key:"0", label:"Zero Brix", p: f.predZero });
+        if (f.predZero) f.milestones.push({ key:"0", label:"End Brix (" + END_TARGET_BRIX + ")", p: f.predZero });
 
         var upcoming = f.milestones
           .map(function(m){ return { m: m, absTs: t0 + m.p.day*86400000 }; })
@@ -990,7 +991,7 @@
       else {
         var tdz = document.createElement("td");
         var zBadge = sampleBadge(f.sampledEnd, f.needsEnd);
-        tdz.innerHTML = (f.readings.length>=2 ? '<span class="muted">plateau &gt; 0</span>' : '<span class="muted">—</span>') + (zBadge ? '<div>' + zBadge + '</div>' : '');
+        tdz.innerHTML = (f.readings.length>=2 ? '<span class="muted">plateau &gt; −2</span>' : '<span class="muted">—</span>') + (zBadge ? '<div>' + zBadge + '</div>' : '');
         tr.appendChild(tdz);
       }
 
@@ -1019,7 +1020,7 @@
           left.appendChild(tooltip);
           var legend = document.createElement("div"); legend.className = "detail-legend";
           var hasSampledPoint = f.readings.some(function(r){ return r.sample10 || r.sample50 || r.sampleEnd; });
-          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span>'+(hasSampledPoint?'<span><i class="swatch sw-point-sampled"></i>Sample taken here</span>':'')+'<span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-accept"></i>8–12% / 45–55% acceptable range</span><span><i class="swatch sw-b10"></i>10% predicted-date CI</span><span><i class="swatch sw-b50"></i>50% predicted-date CI</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>Zero-Brix predicted-date CI</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--blue-deep)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ink2)"></i>50% Brix value</span>';
+          legend.innerHTML = '<span><i class="swatch sw-point"></i>Reading (hover for detail)</span>'+(hasSampledPoint?'<span><i class="swatch sw-point-sampled"></i>Sample taken here</span>':'')+'<span><i class="swatch sw-line"></i>Fitted curve</span><span><i class="swatch sw-accept"></i>8–12% / 45–55% acceptable range</span><span><i class="swatch sw-b10"></i>10% predicted-date CI</span><span><i class="swatch sw-b50"></i>50% predicted-date CI</span>'+(f.predZero?'<span><i class="swatch sw-b0"></i>End Brix (−2) predicted-date CI</span>':'')+'<span><i class="swatch-hline" style="border-top:2px dashed var(--blue-deep)"></i>10% Brix value</span><span><i class="swatch-hline" style="border-top:2px dashed var(--ink2)"></i>50% Brix value</span>';
           if (f.readings.some(function(r){ return r.temp != null; })) legend.innerHTML += '<span><i class="swatch sw-temp"></i>Temperature (right axis, 20\u201332 \u00B0C)</span>';
           left.appendChild(legend);
           var stats = document.createElement("p"); stats.className = "detail-stats";
